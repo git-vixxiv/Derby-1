@@ -121,3 +121,11 @@ Single-developer project. Commit directly to `main` for small cosmetic/tuning ch
 ## When in doubt
 
 Ask Joe. He'd rather answer a clarifying question than get a wrong-direction implementation that has to be undone.
+
+## Game Studios template (added 2026-09-27)
+
+This repo now carries the Claude-Code-Game-Studios agent framework (49 agents, 74 skills, hooks) from https://github.com/Donchitos/Claude-Code-Game-Studios, on branch `studio/game-studios-template`, for evaluation.
+
+- **The briefing above still governs.** Where the template's guidance conflicts with the design principles in this file, this file wins.
+- The template assumes Godot, Unity or Unreal. **Demo Derby is vanilla HTML5 Canvas + JavaScript with no engine**, so engine-specialist agents do not apply, and skills that resolve a code root (`src/`, `Assets/`, `Source/`) will report "unresolved" rather than scan `js/`. Start with `/start` (choose "existing work") and `/adopt`.
+- The template's own orientation file: @.claude/docs/game-studios-CLAUDE.md
