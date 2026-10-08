@@ -102,31 +102,68 @@ function drawCar(car) {
   const frontX = halfLen;
   const rearX = -halfLen;
 
-  // ---- Deformed outline (car-local). Ends cave in around where they were
-  // hit; the overall crush is already in dim.length, so the end edges vary
-  // around it. Sides push straight in. Corners are chamfered 3px.
+  // Model style (base units -> scaled)
+  const S = CAR_SCALE;
+  const st = type.style;
+  const fc = st.fc * S, rc = st.rc * S;
+  const noseBow = st.noseBow * S, tailBow = st.tailBow * S;
+  const lightPaint = car.color.l > 70;
+
+  // ---- Deformed outline (car-local). The model's plan shape (corner
+  // radius, bowed nose/tail, coke-bottle pinch) with the persistent dents
+  // applied on top. Ends cave in around where they were hit; the overall
+  // crush is already in dim.length, so the end edges vary around it.
   const d = car.deform;
   const fAvg = avg(d.front), rAvg = avg(d.rear);
-  // Never past the undamaged nose/tail
-  const noseMax = type.length / 2, tailMax = -type.length / 2;
-  const frontEdge = d.front.map((v, i) => ({
-    x: Math.min(noseMax, frontX + (fAvg - v)),
-    y: -hw + 3 + i * (W - 6) / (d.front.length - 1)
-  }));
-  const rearEdge = d.rear.map((v, i) => ({
-    x: Math.max(tailMax, rearX - (rAvg - v)),
-    y: hw - 3 - i * (W - 6) / (d.rear.length - 1)
-  }));
-  const sideStep = (totalLen - 6) / (d.sideNeg.length - 1);
-  const negSide = d.sideNeg.map((v, i) => ({ x: rearX + 3 + i * sideStep, y: -hw + v }));
-  const posSide = d.sidePos.map((v, i) => ({ x: rearX + 3 + i * sideStep, y: hw - v })).reverse();
-  const outline = [...negSide, ...frontEdge, ...posSide, ...rearEdge];
+  const noseMax = type.length / 2, tailMax = -type.length / 2; // never past the undamaged nose/tail
+  const innerHw = Math.max(1, hw - Math.max(fc, rc));
+  const frontEdge = d.front.map((v, i) => {
+    const y = -hw + fc + i * (W - 2 * fc) / (d.front.length - 1);
+    const bowBack = noseBow * (y / Math.max(1, hw - fc)) ** 2;
+    return { x: Math.min(noseMax, frontX - bowBack + (fAvg - v)), y };
+  });
+  const rearEdge = d.rear.map((v, i) => {
+    const y = hw - rc - i * (W - 2 * rc) / (d.rear.length - 1);
+    const bowBack = tailBow * (y / Math.max(1, hw - rc)) ** 2;
+    return { x: Math.max(tailMax, rearX + bowBack - (rAvg - v)), y };
+  });
+  const sideX0 = rearX + rc, sideX1 = frontX - noseBow - fc;
+  const sideStep = (sideX1 - sideX0) / (d.sideNeg.length - 1);
+  // Coke-bottle: doors pinched in slightly between fuller fenders
+  const pinch = i => st.features.includes('cokeBottle') ? Math.sin(Math.PI * i / (d.sideNeg.length - 1)) ** 2 * 0.9 * S : 0;
+  const negSide = d.sideNeg.map((v, i) => ({ x: sideX0 + i * sideStep, y: -hw + v + pinch(i) }));
+  const posSide = d.sidePos.map((v, i) => ({ x: sideX0 + i * sideStep, y: hw - v - pinch(i) })).reverse();
+  // Rounded corners: quarter arcs between each side and end edge
+  const arc = (from, to, cx, cy, a0, a1, r) => {
+    const pts = [];
+    for (let k = 1; k <= 3; k++) {
+      const t = k / 4, a = a0 + (a1 - a0) * t;
+      pts.push({ x: cx + Math.cos(a) * r + (to.x - from.x - (Math.cos(a1) - Math.cos(a0)) * r) * t,
+                 y: cy + Math.sin(a) * r + (to.y - from.y - (Math.sin(a1) - Math.sin(a0)) * r) * t });
+    }
+    return pts;
+  };
+  const nFL = negSide[negSide.length - 1], fF = frontEdge[0], fL = frontEdge[frontEdge.length - 1], pF = posSide[0];
+  const pR = posSide[posSide.length - 1], rF = rearEdge[0], rL = rearEdge[rearEdge.length - 1], nR = negSide[0];
+  const outline = [
+    ...negSide,
+    ...arc(nFL, fF, nFL.x, nFL.y + fc, -Math.PI / 2, 0, fc),
+    ...frontEdge,
+    ...arc(fL, pF, pF.x, fL.y, 0, Math.PI / 2, fc),
+    ...posSide,
+    ...arc(pR, rF, pR.x, pR.y - rc, Math.PI / 2, Math.PI, rc),
+    ...rearEdge,
+    ...arc(rL, nR, nR.x, rL.y, Math.PI, Math.PI * 1.5, rc)
+  ];
   const tracePath = () => {
     ctx.beginPath();
     ctx.moveTo(outline[0].x, outline[0].y);
     for (let i = 1; i < outline.length; i++) ctx.lineTo(outline[i].x, outline[i].y);
     ctx.closePath();
   };
+  // x of the nose/tail edge at a given y (for placing lamps on the curve)
+  const noseAt = y => frontX - noseBow * (y / Math.max(1, hw - fc)) ** 2;
+  const tailAt = y => rearX + tailBow * (y / Math.max(1, hw - rc)) ** 2;
 
   // Shadow
   ctx.save();
@@ -146,11 +183,26 @@ function drawCar(car) {
   tracePath();
   ctx.clip();
 
-  // Hood (runs past the nose; the clip shapes its crumpled front)
+  // Layout front to back: hood | windshield | roof | back glass | trunk
   const hoodStart = halfLen - dim.hoodLength;
+  const cabinFront = hoodStart;
+  const cabinRear = -halfLen + dim.trunkLength;
+  const roofFront = cabinFront - st.ws * S;
+  const roofRear = cabinRear + st.bl * S;
+  const fender = 3.5 * S;
+
+  // Hood (runs past the nose; the clip shapes its crumpled front)
   if (dim.hoodLength > 5) {
-    ctx.fillStyle = hsl(car.color, 8 - frontPct * 25 + baseLightness);
-    ctx.fillRect(hoodStart, -hw + 4, dim.hoodLength + 12, W - 8);
+    ctx.fillStyle = hsl(car.color, 6 - frontPct * 25 + baseLightness);
+    ctx.fillRect(hoodStart, -hw + fender, dim.hoodLength + 12, W - fender * 2);
+
+    if (st.features.includes('hoodCrease')) {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.beginPath(); ctx.moveTo(hoodStart + 2, -0.5); ctx.lineTo(frontX - 2, -0.5); ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath(); ctx.moveTo(hoodStart + 2, 0.7); ctx.lineTo(frontX - 2, 0.7); ctx.stroke();
+    }
 
     // Buckled hood: a raised ridge across it once the front is badly hit
     if (frontPct > 0.3) {
@@ -172,74 +224,194 @@ function drawCar(car) {
     }
   }
 
-  // Windshield
-  const wsX = hoodStart - 2;
-  ctx.fillStyle = '#1a2838';
-  ctx.beginPath();
-  ctx.roundRect(wsX - 8, -hw + 5, 10, W - 10, 2);
-  ctx.fill();
+  // Trunk deck / wagon tailgate (runs past the tail; the clip shapes it)
+  const trunkDarkness = rearPct * 20;
+  ctx.fillStyle = hsl(car.color, -12 - trunkDarkness + baseLightness);
+  ctx.fillRect(-halfLen - 12, -hw + fender, dim.trunkLength + 12, W - fender * 2);
 
-  // Cabin
-  const cabinStart = -halfLen + dim.trunkLength + 2;
-  const cabinEnd = wsX - 10;
-  const actualCabinLen = cabinEnd - cabinStart;
-  if (actualCabinLen > 6) {
-    ctx.fillStyle = hsl(car.color, -10 + baseLightness);
+  // Greenhouse: glass all round, roof panel on top. The strips of glass
+  // left showing are the windshield, back glass and side windows.
+  if (cabinFront - cabinRear > 6) {
+    ctx.fillStyle = '#1a2838';
     ctx.beginPath();
-    ctx.roundRect(cabinStart, -hw + 4, actualCabinLen, W - 8, 3);
+    ctx.roundRect(cabinRear, -hw + 3 * S, cabinFront - cabinRear, W - 6 * S, (st.roofR + 1) * S);
     ctx.fill();
 
-    ctx.fillStyle = '#1a2838';
-    ctx.fillRect(cabinStart + 4, -hw + 5, actualCabinLen - 8, 4);
-    ctx.fillRect(cabinStart + 4, hw - 9, actualCabinLen - 8, 4);
+    const roofW = W - 9 * S;
+    if (roofFront - roofRear > 4) {
+      ctx.fillStyle = st.features.includes('policeRoof') ? '#e8e8e8' : hsl(car.color, -6 + baseLightness);
+      ctx.beginPath();
+      ctx.roundRect(roofRear, -roofW / 2, roofFront - roofRear, roofW, st.roofR * S);
+      ctx.fill();
+
+      // Vinyl tops: full (Delta 88) or rear-half landau with chrome band (DeVille)
+      const vinyl = st.features.includes('vinylFull') ? 1 : st.features.includes('vinylHalf') ? 0.55 : 0;
+      if (vinyl) {
+        const vEnd = roofRear + (roofFront - roofRear) * vinyl;
+        ctx.fillStyle = lightPaint ? 'rgba(60,40,30,0.85)' : 'rgba(235,230,220,0.85)';
+        ctx.beginPath();
+        ctx.roundRect(roofRear, -roofW / 2, vEnd - roofRear, roofW, st.roofR * S);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        ctx.lineWidth = 0.6;
+        for (let gy = -roofW / 2 + 2; gy < roofW / 2; gy += 2.2) {
+          ctx.beginPath(); ctx.moveTo(roofRear + 1, gy); ctx.lineTo(vEnd - 1, gy); ctx.stroke();
+        }
+        if (vinyl < 1) {
+          ctx.strokeStyle = 'rgba(230,230,230,0.9)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.moveTo(vEnd, -roofW / 2); ctx.lineTo(vEnd, roofW / 2); ctx.stroke();
+        }
+      }
+
+      // Wagon roof rack: two rails and crossbars
+      if (st.features.includes('roofRack')) {
+        ctx.strokeStyle = 'rgba(200,200,200,0.85)';
+        ctx.lineWidth = 1;
+        const ry = roofW / 2 - 1.5 * S;
+        ctx.beginPath();
+        ctx.moveTo(roofRear + 3, -ry); ctx.lineTo(roofFront - 3, -ry);
+        ctx.moveTo(roofRear + 3, ry); ctx.lineTo(roofFront - 3, ry);
+        for (const f of [0.15, 0.5, 0.85]) {
+          const bx = roofRear + (roofFront - roofRear) * f;
+          ctx.moveTo(bx, -ry); ctx.lineTo(bx, ry);
+        }
+        ctx.stroke();
+      }
+    }
   }
 
-  // Trunk (runs past the tail; the clip shapes its crumpled end)
-  const trunkStart = -halfLen - 12;
-  const trunkLen = dim.trunkLength + 9;
-  const trunkDarkness = rearPct * 20;
-  if (dim.trunkLength > 4) {
-    if (type.bodyStyle === 'wagon') {
-      ctx.fillStyle = hsl(car.color, -5 - trunkDarkness + baseLightness);
-      ctx.fillRect(trunkStart, -hw + 4, trunkLen, W - 8);
-      if (dim.trunkLength > 10) {
-        ctx.fillStyle = '#1a2838';
-        ctx.fillRect(-halfLen + 7, -hw + 6, dim.trunkLength * 0.4, W - 12);
-      }
-    } else {
-      ctx.fillStyle = hsl(car.color, -15 - trunkDarkness + baseLightness);
-      ctx.fillRect(trunkStart, -hw + 5, trunkLen, W - 10);
+  // Imperial: the faux spare-tire hump stamped into the deck lid
+  if (st.features.includes('spareTire') && dim.trunkLength > 8) {
+    const cx = -halfLen + dim.trunkLength * 0.48;
+    const r = Math.min(dim.trunkLength * 0.36, hw * 0.5);
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.arc(cx, 0, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath(); ctx.arc(cx, 0, r - 1.2, Math.PI * 0.9, Math.PI * 1.6); ctx.stroke();
+  }
+
+  // Imperial: razor-edge fender tops running nose to tail
+  if (st.features.includes('knifeEdge')) {
+    ctx.strokeStyle = 'rgba(235,235,235,0.7)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(rearX + 2, -hw + fender); ctx.lineTo(frontX - 2, -hw + fender);
+    ctx.moveTo(rearX + 2, hw - fender); ctx.lineTo(frontX - 2, hw - fender);
+    ctx.stroke();
+  }
+
+  // Town Car: chrome spear down each flank
+  if (st.features.includes('chromeSpear')) {
+    ctx.strokeStyle = 'rgba(235,235,235,0.75)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(rearX + 4, -hw + 1.2 * S); ctx.lineTo(frontX - 5, -hw + 1.2 * S);
+    ctx.moveTo(rearX + 4, hw - 1.2 * S); ctx.lineTo(frontX - 5, hw - 1.2 * S);
+    ctx.stroke();
+  }
+
+  // Country Squire: woodgrain down both flanks and across the tailgate
+  if (st.features.includes('woodgrain')) {
+    const band = 2.6 * S;
+    const wx0 = rearX - 2, wx1 = cabinFront + 1;
+    ctx.fillStyle = '#7a4a22';
+    ctx.fillRect(wx0, -hw, wx1 - wx0, band);
+    ctx.fillRect(wx0, hw - band, wx1 - wx0, band);
+    ctx.fillRect(rearX - 2, -hw, dim.trunkLength + 2, W);
+    ctx.strokeStyle = 'rgba(160,105,55,0.8)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    for (const yy of [-hw + band * 0.35, -hw + band * 0.7, hw - band * 0.35, hw - band * 0.7]) {
+      ctx.moveTo(wx0, yy); ctx.lineTo(wx1, yy + 0.3);
     }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(230,230,230,0.7)'; // chrome frame around the wood
+    ctx.beginPath();
+    ctx.moveTo(wx0, -hw + band); ctx.lineTo(wx1, -hw + band);
+    ctx.moveTo(wx0, hw - band); ctx.lineTo(wx1, hw - band);
+    ctx.stroke();
+  }
+
+  // Stand-up hood ornament (Lincoln star / Cadillac wreath)
+  if (st.features.includes('hoodOrnament') && frontPct < 0.5) {
+    ctx.fillStyle = '#ddd';
+    ctx.beginPath(); ctx.arc(noseAt(0) - 3 * S, 0, 1 * S, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(220,220,220,0.6)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(noseAt(0) - 4 * S, 0); ctx.lineTo(hoodStart + 2, 0); ctx.stroke();
+  }
+
+  // Police Interceptor: A-pillar spotlight on the driver's side
+  if (st.features.includes('spotlight')) {
+    ctx.fillStyle = '#ccc';
+    ctx.beginPath(); ctx.arc(cabinFront - st.ws * S * 0.4, -hw + 2 * S, 1.4 * S, 0, Math.PI * 2); ctx.fill();
   }
 
   // Headlights: a lamp breaks once its corner has caved in
   const leftLampOut = (d.front[0] + d.front[1]) / 2 - fAvg * 0.5 > 3 || frontPct > 0.75;
   const rightLampOut = (d.front[d.front.length - 1] + d.front[d.front.length - 2]) / 2 - fAvg * 0.5 > 3 || frontPct > 0.75;
   if (dim.hoodLength > 6) {
-    [[-hw + 6, leftLampOut], [hw - 6, rightLampOut]].forEach(([ly, out]) => {
+    [[-1, leftLampOut], [1, rightLampOut]].forEach(([side, out]) => {
       ctx.fillStyle = out ? '#222' : (car.disabled ? '#776' : '#ffe');
       ctx.beginPath();
-      ctx.ellipse(frontX - 5, ly, 3, 2.5, 0, 0, Math.PI * 2);
+      if (st.lamps === 'quadRound') {
+        for (const off of [4, 7.6]) {
+          const ly = side * (hw - off * S);
+          ctx.moveTo(noseAt(ly) - 2 * S + 1.5 * S, ly);
+          ctx.arc(noseAt(ly) - 2 * S, ly, 1.5 * S, 0, Math.PI * 2);
+        }
+      } else if (st.lamps === 'quadRect') {
+        for (const off of [4, 7.4]) {
+          const ly = side * (hw - off * S);
+          ctx.rect(noseAt(ly) - 3 * S, ly - 1.4 * S, 2.2 * S, 2.8 * S);
+        }
+      } else { // composite: one wide wrap-around lamp per side
+        const ly = side * (hw - 5.5 * S);
+        ctx.ellipse(noseAt(ly) - 2 * S, ly, 1.3 * S, 3 * S, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
     });
   }
 
   // Taillights
-  if (dim.trunkLength > 5) {
-    const tailOut = rearPct > 0.6;
-    ctx.fillStyle = tailOut ? '#300' : (car.disabled ? '#600' : '#c00');
-    ctx.beginPath();
-    ctx.roundRect(rearX + 2, -hw + 5, 4, 5, 1);
-    ctx.roundRect(rearX + 2, hw - 10, 4, 5, 1);
-    ctx.fill();
-  }
+  const tailOut = rearPct > 0.6;
+  ctx.fillStyle = tailOut ? '#300' : (car.disabled ? '#600' : '#c00');
+  ctx.beginPath();
+  [-1, 1].forEach(side => {
+    const tx = y => tailAt(y);
+    if (st.tails === 'tripleRound') {          // Impala: three round lamps a side
+      for (const off of [3.2, 6.4, 9.6]) {
+        const ly = side * (hw - off * S);
+        ctx.moveTo(tx(ly) + 1.5 * S + 1.3 * S, ly);
+        ctx.arc(tx(ly) + 1.5 * S, ly, 1.3 * S, 0, Math.PI * 2);
+      }
+    } else if (st.tails === 'fullWidth') {     // LeSabre: one bar across the tail
+      if (side === 1) ctx.rect(tx(0) + 0.5, -hw + 2.5 * S, 1.8 * S, W - 5 * S);
+    } else if (st.tails === 'verticalCorner') { // fender-tip lamps (DeVille, Squire)
+      ctx.rect(tx(side * hw) + 0.5, side > 0 ? hw - 1.8 * S : -hw, 7 * S, 1.8 * S);
+    } else if (st.tails === 'wraparound') {    // Delta 88: wraps the corner
+      ctx.rect(tx(side * hw) + 0.5, side > 0 ? hw - 8 * S : -hw + 1 * S, 1.8 * S, 7 * S);
+      ctx.rect(tx(side * hw) + 0.5, side > 0 ? hw - 1.8 * S : -hw, 4 * S, 1.8 * S);
+    } else if (st.tails === 'slimRect') {      // Imperial: long thin lamps
+      ctx.rect(tx(side * hw) + 0.5, side > 0 ? hw - 11 * S : 1 * S - hw, 1.2 * S, 10 * S);
+    } else {                                   // wideRect
+      ctx.rect(tx(side * hw) + 0.5, side > 0 ? hw - 9.5 * S : -hw + 1.5 * S, 2 * S, 8 * S);
+    }
+  });
+  ctx.fill();
 
-  // Car number
-  ctx.fillStyle = car.disabled ? '#666' : '#fff';
-  ctx.font = `bold ${Math.floor(W * 0.42)}px Arial`;
+  // Car number, painted on the roof
+  const numX = cabinFront - cabinRear > 6 ? (roofFront + roofRear) / 2 : 0;
+  ctx.font = `bold ${Math.floor(W * 0.32)}px Arial`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(car.carNumber.toString().padStart(2, '0'), 0, 0);
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.strokeText(car.carNumber.toString().padStart(2, '0'), numX, 0);
+  ctx.fillStyle = car.disabled ? '#888' : '#fff';
+  ctx.fillText(car.carNumber.toString().padStart(2, '0'), numX, 0);
 
   // Fold lines in the sheet metal (persistent): dark crease + light edge
   car.creases.forEach(c => {
@@ -311,7 +483,7 @@ function drawCar(car) {
   const bumperShade = car.disabled ? 70 : 100;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 2.5;
   ctx.strokeStyle = `rgb(${bumperShade},${bumperShade},${bumperShade})`;
   ctx.beginPath();
   frontEdge.forEach((p, i) => i ? ctx.lineTo(p.x - 1, p.y) : ctx.moveTo(p.x - 1, p.y));
@@ -321,12 +493,28 @@ function drawCar(car) {
   rearEdge.forEach((p, i) => i ? ctx.lineTo(p.x + 1, p.y) : ctx.moveTo(p.x + 1, p.y));
   ctx.stroke();
 
-  // WHEELS - 22% in from each end
+  // Police push bar ahead of the nose
+  if (st.features.includes('pushBar')) {
+    ctx.fillStyle = '#151515';
+    ctx.fillRect(noseAt(0) + 1 * S, -hw * 0.55, 1.6 * S, hw * 1.1);
+    ctx.fillRect(noseAt(0) - 1 * S, -hw * 0.45, 2.2 * S, 1.2 * S);
+    ctx.fillRect(noseAt(0) - 1 * S, hw * 0.45 - 1.2 * S, 2.2 * S, 1.2 * S);
+  }
+  // Rubber bumper guards ('77-'85 GM)
+  if (st.features.includes('bumperGuards')) {
+    ctx.fillStyle = '#111';
+    for (const gy of [-hw * 0.42, hw * 0.42]) {
+      ctx.fillRect(noseAt(gy) - 0.5, gy - 1.2 * S, 2 * S, 2.4 * S);
+      ctx.fillRect(tailAt(gy) - 2 * S + 0.5, gy - 1.2 * S, 2 * S, 2.4 * S);
+    }
+  }
+
+  // WHEELS at each model's real wheelbase position
   ctx.fillStyle = rearPct > 0.8 ? '#444' : '#111';
   const wheelW = 10 * CAR_SCALE;
   const wheelH = 5 * CAR_SCALE;
-  const frontWheelX = halfLen - totalLen * 0.22;
-  const rearWheelX = -halfLen + totalLen * 0.22;
+  const frontWheelX = halfLen - totalLen * st.wheelF;
+  const rearWheelX = -halfLen + totalLen * st.wheelR;
 
   // Front wheels show the steering actually reaching the road, so a bent
   // car visibly toes off to one side

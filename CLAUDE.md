@@ -94,22 +94,24 @@ Tuned outside `PHYSICS` (in code, with history comments):
 - Speed-bonus damage: `pow(speed - 2, 1.9) * 5` (`collision.js`), on the old top-speed-9 scale: all damage and crash-sound speeds are multiplied by `DAMAGE_SPEED_SCALE = 9 / MAX_FORWARD_SPEED` so a full-speed hit still does what it did at top speed 9. Measured: 90%-speed rear ram into a door = 165 side damage.
 - Wall damage: `impactSpeed * 3 * zoneMultiplier`, where impactSpeed is the velocity component into the wall (drive + slide + knockback) (`physics.js`, `WALL_DAMAGE_PER_SPEED`). The zone is the part of the car that hits the wall (front 1.4×, side 0.8×, rear 0.5×, divided by model strength), not which wall was hit.
 
-## Car roster (v10 first-pass stats — awaiting Joe's tuning)
+## Car roster (v10.1)
 
-`frontStrength`/`rearStrength` divide incoming zone damage (higher = tougher). `weight` is collision mass. `acceleration`/`topSpeed` multiply the PHYSICS values.
+Each model is a specific generation drawn to real proportions (length = real inches × 0.3, width = inches × 0.36, before CAR_SCALE), with model-specific details from `style` in `CAR_TYPES` (corner radius, nose/tail bow, windshield/back-glass rake, wheel positions, lamp styles, features). Joe's priority: **cars must be visually recognizable as the real car**; stats stay nearly equal.
 
-| Model | weight | accel | top | front | rear | identity |
-|---|---|---|---|---|---|---|
-| Crown Vic | 1.00 | 1.05 | 1.03 | 1.00 | 1.00 | quick all-rounder |
-| Town Car | 1.08 | 0.97 | 1.00 | 1.00 | 1.05 | heavy cruiser |
-| Impala | 0.94 | 1.08 | 1.04 | 0.92 | 0.95 | light and fast, fragile |
-| Imperial | 1.20 | 0.88 | 0.95 | 1.20 | 1.10 | tank, slow off the line |
-| Wagon | 1.12 | 0.92 | 0.97 | 0.95 | 1.25 | long tail, rear-ram specialist |
-| LeSabre | 0.96 | 1.03 | 1.00 | 0.97 | 0.97 | nimble mid-size |
-| DeVille | 1.15 | 0.92 | 0.98 | 1.08 | 1.05 | heavy luxury bruiser |
-| Delta 88 | 1.02 | 1.00 | 1.00 | 1.02 | 1.00 | balanced baseline |
+Stats: every car totals 5.00. One +0.04 edge, one −0.04 weakness (Delta 88 is even). `frontStrength`/`rearStrength` divide incoming zone damage; `weight` is collision mass.
 
-Visual proportions (hood/trunk/cabin) and body style also vary. Any change to these numbers shifts balance — get Joe's approval.
+| Model | Generation | Top-down features | Edge (+0.04) | Weakness (−0.04) |
+|---|---|---|---|---|
+| Crown Vic | '98–'11 Police Interceptor | rounded aero body, white roof, A-pillar spotlight, push bar | top speed | weight |
+| Town Car | '90–'97 | long hood, formal roof, hood ornament, chrome spear | weight | acceleration |
+| Impala | '65–'70 | fastback roof, triple round taillights, hood crease, coke-bottle | acceleration | front strength |
+| Imperial | '64–'66 | longest, razor-edge fenders, spare-tire trunk hump | front strength | top speed |
+| Wagon | Country Squire '79–'91 | long roof, woodgrain sides + tailgate, roof rack | rear strength | acceleration |
+| LeSabre | '92–'99 | shortest, rounded, full-width taillight bar | acceleration | weight |
+| DeVille | Sedan DeVille '77–'84 | half vinyl landau roof, wreath ornament, fender-tip taillights | weight | top speed |
+| Delta 88 | '77–'85 | boxy, full vinyl roof, wraparound taillights, bumper guards | — | — |
+
+Sizes differ with the real cars (LeSabre 60.0 to Imperial 68.1 base length), so hitboxes differ by up to ±7%.
 
 ## File structure
 

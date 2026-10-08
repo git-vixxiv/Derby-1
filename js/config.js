@@ -60,20 +60,49 @@ const PALETTE_FAMILY_WAGON = [{h:30,s:35,l:38},{h:35,s:25,l:55},{h:80,s:25,l:35}
 const PALETTE_NEUTRAL_BRIGHT = [{h:0,s:65,l:42},{h:215,s:65,l:42},{h:130,s:55,l:32},{h:0,s:0,l:88},{h:30,s:70,l:48},{h:280,s:50,l:38}]; // Impala / Delta 88 — varied bright daily-driver
 const PALETTE_MID_TIER = [{h:215,s:45,l:30},{h:355,s:45,l:32},{h:0,s:0,l:60},{h:0,s:0,l:92},{h:130,s:35,l:30}]; // LeSabre — navy, maroon, silver, white, dark green
 
-// Car types. Proportions, body style and palette are cosmetic. The stats
-// are a first-pass spread (v10), every car trading something away:
+// Car types (v10.1). Each model is a specific generation, drawn to its
+// real proportions: length = real inches × 0.3, width = real inches × 0.36
+// (before CAR_SCALE). hood + cabin + trunk = length.
+//
+// Stats: every car has the same total. Each model gets one +0.04 edge and
+// one matching −0.04 weakness (Delta 88 is the even baseline):
 //   weight        — mass in collisions: heavier shoves harder, gets shoved less
 //   acceleration  — multiplies BASE_ACCELERATION
 //   topSpeed      — multiplies MAX_FORWARD/REVERSE_SPEED
 //   frontStrength — engine-zone toughness: damage taken is divided by it
 //   rearStrength  — rear-zone toughness: damage taken is divided by it
+//
+// style (base units, scaled by CAR_SCALE when drawn):
+//   fc/rc        — front/rear corner radius (rounded '90s bodies vs square '60s-'70s)
+//   noseBow/tailBow — how far the nose/tail bows out at the centerline
+//   ws/bl        — windshield / back glass length (rake: fastback vs formal roof)
+//   roofR        — roof panel corner radius
+//   wheelF/wheelR — wheel centers as a fraction of length from each end
+//   lamps        — headlight style; tails — taillight style
+//   features     — model-specific details drawn on top (see drawCarFeatures)
 const CAR_TYPES = [
-  { name: 'Crown Vic', length: 65, width: 28, hoodLength: 20, trunkLength: 16, cabinLength: 29, bodyStyle: 'sedan', colorPalette: PALETTE_POLICE,         frontStrength: 1.00, rearStrength: 1.00, weight: 1.00, acceleration: 1.05, topSpeed: 1.03, trait: 'quick all-rounder' },
-  { name: 'Town Car',  length: 65, width: 28, hoodLength: 22, trunkLength: 14, cabinLength: 29, bodyStyle: 'sedan', colorPalette: PALETTE_LUXURY_DARK,    frontStrength: 1.00, rearStrength: 1.05, weight: 1.08, acceleration: 0.97, topSpeed: 1.00, trait: 'heavy cruiser' },
-  { name: 'Impala',    length: 65, width: 28, hoodLength: 19, trunkLength: 17, cabinLength: 29, bodyStyle: 'sedan', colorPalette: PALETTE_NEUTRAL_BRIGHT, frontStrength: 0.92, rearStrength: 0.95, weight: 0.94, acceleration: 1.08, topSpeed: 1.04, trait: 'light and fast, fragile' },
-  { name: 'Imperial',  length: 65, width: 28, hoodLength: 21, trunkLength: 15, cabinLength: 29, bodyStyle: 'sedan', colorPalette: PALETTE_LUXURY_DARK,    frontStrength: 1.20, rearStrength: 1.10, weight: 1.20, acceleration: 0.88, topSpeed: 0.95, trait: 'tank, slow off the line' },
-  { name: 'Wagon',     length: 65, width: 28, hoodLength: 18, trunkLength: 20, cabinLength: 27, bodyStyle: 'wagon', colorPalette: PALETTE_FAMILY_WAGON,   frontStrength: 0.95, rearStrength: 1.25, weight: 1.12, acceleration: 0.92, topSpeed: 0.97, trait: 'long tail, rear-ram specialist' },
-  { name: 'LeSabre',   length: 65, width: 28, hoodLength: 18, trunkLength: 17, cabinLength: 30, bodyStyle: 'sedan', colorPalette: PALETTE_MID_TIER,       frontStrength: 0.97, rearStrength: 0.97, weight: 0.96, acceleration: 1.03, topSpeed: 1.00, trait: 'nimble mid-size' },
-  { name: 'DeVille',   length: 65, width: 28, hoodLength: 20, trunkLength: 16, cabinLength: 29, bodyStyle: 'sedan', colorPalette: PALETTE_LUXURY_CLASSIC, frontStrength: 1.08, rearStrength: 1.05, weight: 1.15, acceleration: 0.92, topSpeed: 0.98, trait: 'heavy luxury bruiser' },
-  { name: 'Delta 88',  length: 65, width: 28, hoodLength: 19, trunkLength: 17, cabinLength: 29, bodyStyle: 'sedan', colorPalette: PALETTE_NEUTRAL_BRIGHT, frontStrength: 1.02, rearStrength: 1.00, weight: 1.02, acceleration: 1.00, topSpeed: 1.00, trait: 'balanced baseline' }
+  { name: 'Crown Vic', era: "'98–'11 Police Interceptor", length: 63.6, width: 28.1, hoodLength: 19, cabinLength: 29.6, trunkLength: 15, bodyStyle: 'sedan', colorPalette: PALETTE_POLICE,
+    frontStrength: 1.00, rearStrength: 1.00, weight: 0.96, acceleration: 1.00, topSpeed: 1.04, trait: 'faster top end, lighter',
+    style: { fc: 7, rc: 6, noseBow: 2.5, tailBow: 1.5, ws: 9, bl: 7, roofR: 5, wheelF: 0.21, wheelR: 0.25, lamps: 'composite', tails: 'wideRect', features: ['policeRoof', 'spotlight', 'pushBar'] } },
+  { name: 'Town Car', era: "'90–'97", length: 65.4, width: 27.7, hoodLength: 22, cabinLength: 28.4, trunkLength: 15, bodyStyle: 'sedan', colorPalette: PALETTE_LUXURY_DARK,
+    frontStrength: 1.00, rearStrength: 1.00, weight: 1.04, acceleration: 0.96, topSpeed: 1.00, trait: 'heavier, slower off the line',
+    style: { fc: 4, rc: 4, noseBow: 1, tailBow: 0.5, ws: 8, bl: 5, roofR: 2, wheelF: 0.22, wheelR: 0.25, lamps: 'composite', tails: 'wideRect', features: ['hoodOrnament', 'chromeSpear'] } },
+  { name: 'Impala', era: "'65–'70", length: 63.9, width: 28.4, hoodLength: 20, cabinLength: 26.9, trunkLength: 17, bodyStyle: 'sedan', colorPalette: PALETTE_NEUTRAL_BRIGHT,
+    frontStrength: 0.96, rearStrength: 1.00, weight: 1.00, acceleration: 1.04, topSpeed: 1.00, trait: 'quicker off the line, softer nose',
+    style: { fc: 3.5, rc: 3, noseBow: 0.5, tailBow: 0, ws: 7, bl: 10, roofR: 3, wheelF: 0.21, wheelR: 0.25, lamps: 'quadRound', tails: 'tripleRound', features: ['hoodCrease', 'cokeBottle'] } },
+  { name: 'Imperial', era: "'64–'66", length: 68.1, width: 28.8, hoodLength: 23.5, cabinLength: 26.6, trunkLength: 18, bodyStyle: 'sedan', colorPalette: PALETTE_LUXURY_DARK,
+    frontStrength: 1.04, rearStrength: 1.00, weight: 1.00, acceleration: 1.00, topSpeed: 0.96, trait: 'tougher nose, lower top speed',
+    style: { fc: 2, rc: 2, noseBow: 0, tailBow: 0, ws: 7, bl: 4, roofR: 1.5, wheelF: 0.22, wheelR: 0.26, lamps: 'quadRound', tails: 'slimRect', features: ['spareTire', 'knifeEdge'] } },
+  { name: 'Wagon', era: "Country Squire '79–'91", length: 64.8, width: 28.4, hoodLength: 19, cabinLength: 42, trunkLength: 3.8, bodyStyle: 'wagon', colorPalette: PALETTE_FAMILY_WAGON,
+    frontStrength: 1.00, rearStrength: 1.04, weight: 1.00, acceleration: 0.96, topSpeed: 1.00, trait: 'tougher tail, slower off the line',
+    style: { fc: 3, rc: 2, noseBow: 0.5, tailBow: 0, ws: 8, bl: 2, roofR: 2, wheelF: 0.20, wheelR: 0.22, lamps: 'quadRect', tails: 'verticalCorner', features: ['woodgrain', 'roofRack'] } },
+  { name: 'LeSabre', era: "'92–'99", length: 60.0, width: 26.6, hoodLength: 16, cabinLength: 30, trunkLength: 14, bodyStyle: 'sedan', colorPalette: PALETTE_MID_TIER,
+    frontStrength: 1.00, rearStrength: 1.00, weight: 0.96, acceleration: 1.04, topSpeed: 1.00, trait: 'quicker off the line, lighter',
+    style: { fc: 8, rc: 7, noseBow: 3, tailBow: 2, ws: 11, bl: 9, roofR: 6, wheelF: 0.18, wheelR: 0.24, lamps: 'composite', tails: 'fullWidth', features: [] } },
+  { name: 'DeVille', era: "Sedan DeVille '77–'84", length: 66.3, width: 27.4, hoodLength: 22.5, cabinLength: 27.8, trunkLength: 16, bodyStyle: 'sedan', colorPalette: PALETTE_LUXURY_CLASSIC,
+    frontStrength: 1.00, rearStrength: 1.00, weight: 1.04, acceleration: 1.00, topSpeed: 0.96, trait: 'heavier, lower top speed',
+    style: { fc: 2.5, rc: 2, noseBow: 0.5, tailBow: 0, ws: 7, bl: 4, roofR: 2, wheelF: 0.22, wheelR: 0.25, lamps: 'quadRect', tails: 'verticalCorner', features: ['vinylHalf', 'hoodOrnament'] } },
+  { name: 'Delta 88', era: "'77–'85", length: 65.4, width: 27.4, hoodLength: 21, cabinLength: 27.4, trunkLength: 17, bodyStyle: 'sedan', colorPalette: PALETTE_NEUTRAL_BRIGHT,
+    frontStrength: 1.00, rearStrength: 1.00, weight: 1.00, acceleration: 1.00, topSpeed: 1.00, trait: 'even all-rounder',
+    style: { fc: 3, rc: 3, noseBow: 0.5, tailBow: 0, ws: 7, bl: 6, roofR: 2.5, wheelF: 0.21, wheelR: 0.25, lamps: 'quadRect', tails: 'wraparound', features: ['vinylFull', 'bumperGuards'] } }
 ];
