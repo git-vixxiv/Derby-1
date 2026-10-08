@@ -119,10 +119,22 @@ function resolveCollision(car1, car2, collision) {
   // Get velocities at contact point
   const vel1 = getVelocityAtPoint(car1, collision.contactPoint);
   const vel2 = getVelocityAtPoint(car2, collision.contactPoint);
-  const relVel = vecSub(vel1, vel2);
+  // Normal points from car1 to car2, so relative velocity is taken as
+  // car2 relative to car1: negative along the normal = closing in.
+  // (Before v10 this was vel1 - vel2, which flipped the test below: head-on
+  // rams were treated as separating, dealt no damage, and the attacker
+  // just bulldozed the other car by positional push.)
+  const relVel = vecSub(vel2, vel1);
 
   // Relative velocity along collision normal
   const velAlongNormal = vecDot(relVel, collision.normal);
+
+  // Sustained player contact grinds: feed the scrape loop with the
+  // sliding (tangential) speed plus a share of the shove
+  if (car1.isPlayer || car2.isPlayer) {
+    const tangential = vecSub(relVel, vecMul(collision.normal, velAlongNormal));
+    addScrape((Math.hypot(tangential.x, tangential.y) + Math.abs(velAlongNormal) * 0.3) * DAMAGE_SPEED_SCALE);
+  }
 
   // Don't resolve impulse if velocities are separating (but contact already credited above)
   if (velAlongNormal > 0) {
@@ -130,6 +142,10 @@ function resolveCollision(car1, car2, collision) {
     separateCars(car1, car2, collision);
     return;
   }
+
+  // Closing speeds for damage, captured before the impulse slows the cars
+  const preSpeed1 = Math.abs(car1.speed) + Math.hypot(car1.vx || 0, car1.vy || 0);
+  const preSpeed2 = Math.abs(car2.speed) + Math.hypot(car2.vx || 0, car2.vy || 0);
 
   // Calculate impulse
   const e = P.RESTITUTION;
@@ -161,46 +177,56 @@ function resolveCollision(car1, car2, collision) {
 
   const impulse = vecMul(collision.normal, j);
 
-  // Apply linear impulse
-  if (!car1.disabled) {
-    car1.vx = (car1.vx || 0) + impulse.x / m1;
-    car1.vy = (car1.vy || 0) + impulse.y / m1;
-  }
-  if (!car2.disabled) {
-    car2.vx = (car2.vx || 0) - impulse.x / m2;
-    car2.vy = (car2.vy || 0) - impulse.y / m2;
-  }
+  // Apply linear impulse: car1 is pushed back along -normal, car2 along +normal
+  if (!car1.disabled) applyVelocityChange(car1, -impulse.x / m1, -impulse.y / m1);
+  if (!car2.disabled) applyVelocityChange(car2, impulse.x / m2, impulse.y / m2);
 
   // Apply angular impulse
   if (!car1.disabled) {
-    car1.angularVel += vecCross(r1, impulse) / I1 * P.ANGULAR_IMPULSE_SCALE;
+    car1.angularVel -= vecCross(r1, impulse) / I1 * P.ANGULAR_IMPULSE_SCALE;
   }
   if (!car2.disabled) {
-    car2.angularVel -= vecCross(r2, impulse) / I2 * P.ANGULAR_IMPULSE_SCALE;
+    car2.angularVel += vecCross(r2, impulse) / I2 * P.ANGULAR_IMPULSE_SCALE;
   }
 
   // Separate overlapping cars
   separateCars(car1, car2, collision);
 
   // Apply damage based on impact zone
-  const impactForce = Math.abs(j) * 0.8;
-  applyDamage(car1, car2, collision, impactForce);
+  // Scaled so impacts at the current top speed match the tuned damage
+  // at the old top speed (see DAMAGE_SPEED_SCALE)
+  const impactForce = Math.abs(j) * 0.8 * DAMAGE_SPEED_SCALE;
+  applyDamage(car1, car2, collision, impactForce, preSpeed1, preSpeed2);
 
   // Sparks at contact point
   spawnSparks(collision.contactPoint.x, collision.contactPoint.y, 4 + Math.floor(impactForce * 0.3));
 
-  // Crash sound - louder for player involvement or harder hits
+  // Crash sound - louder for player involvement or harder hits.
+  // Light contact below the threshold is left to the scrape loop so
+  // shoving matches don't machine-gun crash samples.
   const playerInvolved = car1.isPlayer || car2.isPlayer;
-  if (impactForce > 1 || playerInvolved) {
-    playCrashSound(impactForce * (playerInvolved ? 1.2 : 0.6));
+  if (impactForce > 0.8) {
+    playCrashSound(impactForce * (playerInvolved ? 1.2 : 0.6), collision.contactPoint.x);
   }
+}
+
+// An impulse changes the car's real velocity. The part along its direction
+// of travel goes into drive speed (so a rammer is actually stopped by the
+// hit instead of driving on through), the rest into knockback.
+function applyVelocityChange(car, dvx, dvy) {
+  const ma = car.moveAngle ?? car.angle;
+  const hx = Math.cos(ma), hy = Math.sin(ma);
+  const along = dvx * hx + dvy * hy;
+  car.speed += along;
+  car.vx = (car.vx || 0) + dvx - along * hx;
+  car.vy = (car.vy || 0) + dvy - along * hy;
 }
 
 function getVelocityAtPoint(car, point) {
   // Linear velocity
   const linVel = vec(
-    Math.cos(car.angle) * car.speed + (car.vx || 0),
-    Math.sin(car.angle) * car.speed + (car.vy || 0)
+    Math.cos(car.moveAngle ?? car.angle) * car.speed + (car.vx || 0),
+    Math.sin(car.moveAngle ?? car.angle) * car.speed + (car.vy || 0)
   );
 
   // Angular contribution
@@ -231,7 +257,7 @@ function separateCars(car1, car2, collision) {
   }
 }
 
-function applyDamage(car1, car2, collision, impactForce) {
+function applyDamage(car1, car2, collision, impactForce, preSpeed1, preSpeed2) {
   const zone1 = getImpactZone(car1, collision.contactPoint);
   const zone2 = getImpactZone(car2, collision.contactPoint);
 
@@ -239,8 +265,9 @@ function applyDamage(car1, car2, collision, impactForce) {
   const type2 = car2.carType;
 
   // Speed bonus damage
-  const speed1 = Math.abs(car1.speed) + Math.sqrt((car1.vx||0)**2 + (car1.vy||0)**2);
-  const speed2 = Math.abs(car2.speed) + Math.sqrt((car2.vx||0)**2 + (car2.vy||0)**2);
+  // On the old top-speed-9 scale the formulas below were tuned for
+  const speed1 = preSpeed1 * DAMAGE_SPEED_SCALE;
+  const speed2 = preSpeed2 * DAMAGE_SPEED_SCALE;
   // Speed-bonus damage scales super-linearly so high-speed hits hurt
   // proportionally more, matching kinetic-energy intuition. Tuned
   // iteratively: started at *2.5 linear (hits felt glancing), bumped
@@ -255,12 +282,14 @@ function applyDamage(car1, car2, collision, impactForce) {
   if (zone1 === 'front') car1.frontDamage += dmg1;
   else if (zone1 === 'rear') car1.rearDamage += dmg1;
   else car1.sideDamage += dmg1;
+  addDeformation(car1, collision.contactPoint, zone1, dmg1);
 
   // Apply damage to car2
   const dmg2 = (impactForce + speedBonus1) * getZoneDamageMultiplier(zone2, type2);
   if (zone2 === 'front') car2.frontDamage += dmg2;
   else if (zone2 === 'rear') car2.rearDamage += dmg2;
   else car2.sideDamage += dmg2;
+  addDeformation(car2, collision.contactPoint, zone2, dmg2);
 
   // Spawn damage popup numbers for ALL hits
   if (dmg1 >= 1) {
@@ -284,6 +313,7 @@ function applyDamage(car1, car2, collision, impactForce) {
       y: localPoint1.y,
       zone: zone1,
       severity: Math.min(dmg1 / 50, 1),
+      angle: Math.random() * Math.PI,
       type: Math.random() > 0.5 ? 'scratch' : 'dent'
     });
     car2.impactMarks.push({
@@ -291,6 +321,7 @@ function applyDamage(car1, car2, collision, impactForce) {
       y: localPoint2.y,
       zone: zone2,
       severity: Math.min(dmg2 / 50, 1),
+      angle: Math.random() * Math.PI,
       type: Math.random() > 0.5 ? 'scratch' : 'dent'
     });
 
@@ -335,8 +366,8 @@ function spawnDamagePopup(x, y, damage, color) {
 
 function getZoneDamageMultiplier(zone, type) {
   switch (zone) {
-    case 'front': return 1.4 * type.frontStrength;
-    case 'rear': return 0.5 * type.rearStrength;
+    case 'front': return 1.4 / type.frontStrength;
+    case 'rear': return 0.5 / type.rearStrength;
     case 'side': return 0.8;
     default: return 1.0;
   }

@@ -27,10 +27,11 @@
         </div>
         <div class="controls-hint">
           <strong>Keyboard:</strong><br>
-          <kbd>W</kbd> / <kbd>â†‘</kbd> Drive Forward &nbsp;&nbsp;
-          <kbd>S</kbd> / <kbd>â†“</kbd> Drive Reverse<br>
-          <kbd>A</kbd> / <kbd>â†</kbd> Steer Left &nbsp;&nbsp;
-          <kbd>D</kbd> / <kbd>â†’</kbd> Steer Right<br>
+          <kbd>W</kbd> / <kbd>↑</kbd> Drive Forward &nbsp;&nbsp;
+          <kbd>S</kbd> / <kbd>↓</kbd> Drive Reverse<br>
+          <kbd>A</kbd> / <kbd>←</kbd> Steer Left &nbsp;&nbsp;
+          <kbd>D</kbd> / <kbd>→</kbd> Steer Right<br>
+          <kbd>M</kbd> Mute sound<br>
           <em style="color:#666">Steering only works while moving!</em>
         </div>
         <button class="btn" onclick="startGame()">START DERBY</button>
@@ -96,17 +97,18 @@
     </div>
     
     <div id="keyboard-hint">
-      <kbd>W</kbd>/<kbd>â†‘</kbd> Forward &nbsp;
-      <kbd>S</kbd>/<kbd>â†“</kbd> Reverse &nbsp;
-      <kbd>A</kbd>/<kbd>â†</kbd> Left &nbsp;
-      <kbd>D</kbd>/<kbd>â†’</kbd> Right
+      <kbd>W</kbd>/<kbd>↑</kbd> Forward &nbsp;
+      <kbd>S</kbd>/<kbd>↓</kbd> Reverse &nbsp;
+      <kbd>A</kbd>/<kbd>←</kbd> Left &nbsp;
+      <kbd>D</kbd>/<kbd>→</kbd> Right &nbsp;
+      <kbd>M</kbd> Mute
       &nbsp; | &nbsp; <em>Must HIT every 45s!</em>
     </div>
     
     <div id="touch-controls">
       <div class="control-group">
-        <button class="control-btn steer-btn" id="btn-left">â—€</button>
-        <button class="control-btn steer-btn" id="btn-right">â–¶</button>
+        <button class="control-btn steer-btn" id="btn-left">◀</button>
+        <button class="control-btn steer-btn" id="btn-right">▶</button>
       </div>
       <div class="control-group">
         <button class="control-btn reverse-btn" id="btn-reverse">R</button>

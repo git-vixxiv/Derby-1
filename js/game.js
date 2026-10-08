@@ -30,7 +30,7 @@ function initGame(levelNum) {
   carsWrecked = 0;
 
   document.getElementById('player-number').textContent = player.carNumber.toString().padStart(2, '0');
-  document.getElementById('player-model').textContent = '(' + player.carType.name + ')';
+  document.getElementById('player-model').textContent = '(' + player.carType.name + ' — ' + player.carType.trait + ')';
   document.getElementById('disqualified-msg').style.display = 'none';
 }
 
@@ -82,6 +82,7 @@ function startGame() {
 }
 
 function nextLevel() {
+  initAudio(); // Resumes the context if the browser suspended it
   level++;
   initGame(level);
   startCountdown();

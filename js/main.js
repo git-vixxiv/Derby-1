@@ -47,6 +47,10 @@ function gameLoop() {
       }
     }
 
+    // Engines idle at the line; holding gas or reverse revs in place
+    updateEngineSound(0, controls.gas || controls.reverse);
+    updateFieldSound(enemies);
+
     drawArena();
     disabledCars.forEach(drawCar);
     allCars.forEach(drawCar);
@@ -127,6 +131,9 @@ function gameLoop() {
       }
     }
   }
+
+  updateFieldSound(enemies);
+  updateScrapeSound();
 
   // Check for newly disabled cars
   enemies.forEach(enemy => {
@@ -323,6 +330,7 @@ document.addEventListener('keydown', e => {
     case 'd': case 'arrowright': controls.right = true; break;
     case 'w': case 'arrowup': controls.gas = true; break;
     case 's': case 'arrowdown': controls.reverse = true; break;
+    case 'm': if (!e.repeat) toggleMute(); break;
   }
 });
 
