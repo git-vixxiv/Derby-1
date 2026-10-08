@@ -85,7 +85,7 @@ Tuned outside `PHYSICS` (in code, with history comments):
 
 - Post-impact velocity decay: `0.75` per frame (`physics.js`). Was 0.94, then 0.85.
 - Speed-bonus damage: `pow(speed - 2, 1.9) * 5` (`collision.js`). Speed-7 ram ≈ 108 bonus, max-speed ≈ 194.
-- Wall damage: `speed * 3 * zoneMultiplier` (`physics.js`, `WALL_DAMAGE_PER_SPEED`). The zone is the part of the car that hits the wall (front 1.4×, side 0.8×, rear 0.5×, divided by model strength), not which wall was hit.
+- Wall damage: `impactSpeed * 3 * zoneMultiplier`, where impactSpeed is the velocity component into the wall (drive + slide + knockback) (`physics.js`, `WALL_DAMAGE_PER_SPEED`). The zone is the part of the car that hits the wall (front 1.4×, side 0.8×, rear 0.5×, divided by model strength), not which wall was hit.
 
 ## Car roster (v10 first-pass stats — awaiting Joe's tuning)
 

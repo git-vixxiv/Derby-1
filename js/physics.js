@@ -92,8 +92,13 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
   const cos = Math.cos(car.angle);
   const sin = Math.sin(car.angle);
 
-  car.x += cos * car.speed - sin * car.lateralVel + car.vx;
-  car.y += sin * car.speed + cos * car.lateralVel + car.vy;
+  // Full velocity this frame (drive + slide + impact knockback). Wall
+  // damage uses its component into the wall, so a car shoved sideways
+  // into the wall gets hurt and a glancing scrape along it barely does.
+  const velX = cos * car.speed - sin * car.lateralVel + car.vx;
+  const velY = sin * car.speed + cos * car.lateralVel + car.vy;
+  car.x += velX;
+  car.y += velY;
 
   // Wall collisions
   const dim = getCarDimensions(car);
@@ -106,38 +111,39 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
   // actually struck it (backing in hurts the rear, not the engine).
   // Argument is the wall's outward-facing normal.
   let hitWall = false;
+  let wallImpactSpeed = 0;
   if (car.x < wallMargin) {
     car.x = wallMargin;
     car.speed *= 0.1;
     car.vx = Math.abs(car.vx) * 0.3;
-    applyWallDamage(car, vec(-1, 0), absSpeed);
+    wallImpactSpeed = Math.max(wallImpactSpeed, applyWallDamage(car, vec(-1, 0), velX, velY));
     hitWall = true;
   }
   if (car.x > ARENA_WIDTH - wallMargin) {
     car.x = ARENA_WIDTH - wallMargin;
     car.speed *= 0.1;
     car.vx = -Math.abs(car.vx) * 0.3;
-    applyWallDamage(car, vec(1, 0), absSpeed);
+    wallImpactSpeed = Math.max(wallImpactSpeed, applyWallDamage(car, vec(1, 0), velX, velY));
     hitWall = true;
   }
   if (car.y < wallMargin) {
     car.y = wallMargin;
     car.speed *= 0.1;
     car.vy = Math.abs(car.vy) * 0.3;
-    applyWallDamage(car, vec(0, -1), absSpeed);
+    wallImpactSpeed = Math.max(wallImpactSpeed, applyWallDamage(car, vec(0, -1), velX, velY));
     hitWall = true;
   }
   if (car.y > ARENA_HEIGHT - wallMargin) {
     car.y = ARENA_HEIGHT - wallMargin;
     car.speed *= 0.1;
     car.vy = -Math.abs(car.vy) * 0.3;
-    applyWallDamage(car, vec(0, 1), absSpeed);
+    wallImpactSpeed = Math.max(wallImpactSpeed, applyWallDamage(car, vec(0, 1), velX, velY));
     hitWall = true;
   }
 
   // Wall crash sound for player
-  if (hitWall && car.isPlayer && absSpeed > 1) {
-    playCrashSound(absSpeed * 0.8, car.x);
+  if (hitWall && car.isPlayer && wallImpactSpeed > 1) {
+    playCrashSound(wallImpactSpeed * 0.8, car.x);
   }
 
   // Mud tracks
@@ -155,7 +161,9 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
 // strengths are the same ones car-to-car hits use.
 const WALL_DAMAGE_PER_SPEED = 3;
 
-function applyWallDamage(car, wallNormal, absSpeed) {
+// Returns the impact speed (velocity into the wall) for the crash sound.
+function applyWallDamage(car, wallNormal, velX, velY) {
+  const impactSpeed = Math.max(0, velX * wallNormal.x + velY * wallNormal.y);
   const corners = getCarCorners(car);
   const depths = corners.map(c => vecDot(c, wallNormal));
   const maxDepth = Math.max(...depths);
@@ -166,8 +174,9 @@ function applyWallDamage(car, wallNormal, absSpeed) {
   );
 
   const zone = getImpactZone(car, contact);
-  const dmg = absSpeed * WALL_DAMAGE_PER_SPEED * getZoneDamageMultiplier(zone, car.carType);
+  const dmg = impactSpeed * WALL_DAMAGE_PER_SPEED * getZoneDamageMultiplier(zone, car.carType);
   if (zone === 'front') car.frontDamage += dmg;
   else if (zone === 'rear') car.rearDamage += dmg;
   else car.sideDamage += dmg;
+  return impactSpeed;
 }
