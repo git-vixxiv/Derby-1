@@ -7,21 +7,37 @@ const CONTACT_TIMEOUT = 45 * 60; // 45 seconds at 60fps
 
 const PHYSICS = {
   BASE_ACCELERATION: 0.08,
-  MAX_FORWARD_SPEED: 9,
-  MAX_REVERSE_SPEED: 9,  // Same as forward when healthy
+  MAX_FORWARD_SPEED: 6,  // v10: cut from 9 (Joe: "way too fast")
+  MAX_REVERSE_SPEED: 6,  // Same as forward when healthy
   ROLLING_FRICTION: 0.975,
   MUD_DRAG: 0.965,
   MAX_STEER_ANGLE: 0.42,
-  STEER_SPEED: 0.055,
+  STEER_SPEED: 0.04,     // v10: was 0.055 — wheel turns in slower, less twitchy
   STEER_RETURN_SPEED: 0.08,
   MIN_SPEED_TO_TURN: 0.15,
   SLIDE_FRICTION: 0.85,
   ANGULAR_FRICTION: 0.82,
+  // Mud traction (v10). Fraction per frame that the car's direction of
+  // travel swings toward where its nose points. 1.0 would be rails.
+  // Reduced further at speed and by wheel/suspension damage.
+  MUD_GRIP: 0.11,
+  GRIP_LOSS_AT_TOP_SPEED: 0.45,  // grip × (1 - this) at full speed
+  GRIP_LOSS_FROM_DAMAGE: 0.4,    // grip × (1 - this) when front/side fully damaged
+  SLIDE_SCRUB: 0.05,             // speed lost per frame while sliding fully sideways
+  // Bent steering (v10): front damage pulls the car toward the side that
+  // took the hit and adds play/wobble to the wheel.
+  DAMAGE_PULL_MAX: 0.07,         // radians of steering pull at 100% front damage
+  DAMAGE_WOBBLE_MAX: 0.08,       // radians of random wheel play at 100% front/side damage
   // Collision physics
   RESTITUTION: 0.35,
   COLLISION_BIAS: 0.3,
   ANGULAR_IMPULSE_SCALE: 0.012
 };
+
+// Damage and crash-sound formulas were tuned when top speed was 9. This
+// maps current speeds onto that scale so a full-speed hit at the new top
+// speed hurts as much as a full-speed hit did before.
+const DAMAGE_SPEED_SCALE = 9 / PHYSICS.MAX_FORWARD_SPEED;
 
 // Per-model color palettes — each model gets a restricted HSL range that
 // fits its real-world character. Lightness is jittered ±10 at spawn for

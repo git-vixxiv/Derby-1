@@ -95,52 +95,80 @@ function drawCar(car) {
   ctx.translate(car.x, car.y);
   ctx.rotate(car.angle);
 
-  // Shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.2)';
-  ctx.beginPath();
-  ctx.ellipse(3, 3, halfLen, hw + 2, 0, 0, Math.PI * 2);
-  ctx.fill();
-
+  const frontPct = getFrontDamagePct(car);
+  const rearPct = getRearDamagePct(car);
+  const totalPct = (frontPct + rearPct + getSideDamagePct(car)) / 3;
   const baseLightness = car.disabled ? -20 : 0;
-
-  // Main body
-  ctx.fillStyle = hsl(car.color, baseLightness);
-  ctx.beginPath();
   const frontX = halfLen;
   const rearX = -halfLen;
 
-  ctx.moveTo(rearX + 4, -hw);
-  ctx.lineTo(frontX - 5, -hw);
-  ctx.quadraticCurveTo(frontX, -hw, frontX, -hw + 5);
-  ctx.lineTo(frontX, hw - 5);
-  ctx.quadraticCurveTo(frontX, hw, frontX - 5, hw);
-  ctx.lineTo(rearX + 4, hw);
-  ctx.quadraticCurveTo(rearX, hw, rearX, hw - 4);
-  ctx.lineTo(rearX, -hw + 4);
-  ctx.quadraticCurveTo(rearX, -hw, rearX + 4, -hw);
-  ctx.closePath();
+  // ---- Deformed outline (car-local). Ends cave in around where they were
+  // hit; the overall crush is already in dim.length, so the end edges vary
+  // around it. Sides push straight in. Corners are chamfered 3px.
+  const d = car.deform;
+  const fAvg = avg(d.front), rAvg = avg(d.rear);
+  // Never past the undamaged nose/tail
+  const noseMax = type.length / 2, tailMax = -type.length / 2;
+  const frontEdge = d.front.map((v, i) => ({
+    x: Math.min(noseMax, frontX + (fAvg - v)),
+    y: -hw + 3 + i * (W - 6) / (d.front.length - 1)
+  }));
+  const rearEdge = d.rear.map((v, i) => ({
+    x: Math.max(tailMax, rearX - (rAvg - v)),
+    y: hw - 3 - i * (W - 6) / (d.rear.length - 1)
+  }));
+  const sideStep = (totalLen - 6) / (d.sideNeg.length - 1);
+  const negSide = d.sideNeg.map((v, i) => ({ x: rearX + 3 + i * sideStep, y: -hw + v }));
+  const posSide = d.sidePos.map((v, i) => ({ x: rearX + 3 + i * sideStep, y: hw - v })).reverse();
+  const outline = [...negSide, ...frontEdge, ...posSide, ...rearEdge];
+  const tracePath = () => {
+    ctx.beginPath();
+    ctx.moveTo(outline[0].x, outline[0].y);
+    for (let i = 1; i < outline.length; i++) ctx.lineTo(outline[i].x, outline[i].y);
+    ctx.closePath();
+  };
+
+  // Shadow
+  ctx.save();
+  ctx.translate(3, 3);
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  tracePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Main body
+  ctx.fillStyle = hsl(car.color, baseLightness);
+  tracePath();
   ctx.fill();
 
-  // Hood
-  const hoodStart = halfLen - dim.hoodLength;
-  const hoodDarkness = getFrontDamagePct(car) * 25;
-  if (dim.hoodLength > 5) {
-    ctx.fillStyle = hsl(car.color, 8 - hoodDarkness + baseLightness);
-    ctx.beginPath();
-    ctx.roundRect(hoodStart, -hw + 4, dim.hoodLength - 4, W - 8, [0, 4, 4, 0]);
-    ctx.fill();
+  // Everything painted on the body is clipped to the deformed outline
+  ctx.save();
+  tracePath();
+  ctx.clip();
 
-    if (getFrontDamagePct(car) > 0.2) {
-      ctx.strokeStyle = hsl(car.color, -20 + baseLightness);
-      ctx.lineWidth = 1;
-      const wrinkles = Math.floor(getFrontDamagePct(car) * 4);
-      for (let i = 0; i < wrinkles; i++) {
-        const wx = hoodStart + Math.random() * (dim.hoodLength - 6);
-        ctx.beginPath();
-        ctx.moveTo(wx, -hw + 6);
-        ctx.lineTo(wx + (Math.random() - 0.5) * 10, hw - 6);
-        ctx.stroke();
-      }
+  // Hood (runs past the nose; the clip shapes its crumpled front)
+  const hoodStart = halfLen - dim.hoodLength;
+  if (dim.hoodLength > 5) {
+    ctx.fillStyle = hsl(car.color, 8 - frontPct * 25 + baseLightness);
+    ctx.fillRect(hoodStart, -hw + 4, dim.hoodLength + 12, W - 8);
+
+    // Buckled hood: a raised ridge across it once the front is badly hit
+    if (frontPct > 0.3) {
+      const ridgeY = (((car.carNumber * 37) % 11) - 5) / 5 * hw * 0.35;
+      const lift = Math.min(1, (frontPct - 0.3) / 0.5);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = `rgba(255,255,255,${0.25 * lift})`;
+      ctx.beginPath();
+      ctx.moveTo(hoodStart + 3, ridgeY - 1);
+      ctx.lineTo(hoodStart + dim.hoodLength * 0.55, ridgeY - 4 * lift - 1);
+      ctx.lineTo(frontX, ridgeY + 2);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(0,0,0,${0.4 * lift})`;
+      ctx.beginPath();
+      ctx.moveTo(hoodStart + 3, ridgeY + 1);
+      ctx.lineTo(hoodStart + dim.hoodLength * 0.55, ridgeY - 4 * lift + 1);
+      ctx.lineTo(frontX, ridgeY + 4);
+      ctx.stroke();
     }
   }
 
@@ -166,87 +194,40 @@ function drawCar(car) {
     ctx.fillRect(cabinStart + 4, hw - 9, actualCabinLen - 8, 4);
   }
 
-  // Trunk
-  const trunkStart = -halfLen + 4;
-  const trunkDarkness = getRearDamagePct(car) * 20;
+  // Trunk (runs past the tail; the clip shapes its crumpled end)
+  const trunkStart = -halfLen - 12;
+  const trunkLen = dim.trunkLength + 9;
+  const trunkDarkness = rearPct * 20;
   if (dim.trunkLength > 4) {
     if (type.bodyStyle === 'wagon') {
       ctx.fillStyle = hsl(car.color, -5 - trunkDarkness + baseLightness);
-      ctx.beginPath();
-      ctx.roundRect(trunkStart, -hw + 4, dim.trunkLength - 3, W - 8, [4, 0, 0, 4]);
-      ctx.fill();
+      ctx.fillRect(trunkStart, -hw + 4, trunkLen, W - 8);
       if (dim.trunkLength > 10) {
         ctx.fillStyle = '#1a2838';
-        ctx.fillRect(trunkStart + 3, -hw + 6, dim.trunkLength * 0.4, W - 12);
+        ctx.fillRect(-halfLen + 7, -hw + 6, dim.trunkLength * 0.4, W - 12);
       }
     } else {
       ctx.fillStyle = hsl(car.color, -15 - trunkDarkness + baseLightness);
-      ctx.beginPath();
-      ctx.roundRect(trunkStart, -hw + 5, dim.trunkLength - 3, W - 10, [4, 0, 0, 4]);
-      ctx.fill();
-    }
-
-    if (getRearDamagePct(car) > 0.25) {
-      ctx.strokeStyle = hsl(car.color, -25 + baseLightness);
-      ctx.lineWidth = 1;
-      const wrinkles = Math.floor(getRearDamagePct(car) * 3);
-      for (let i = 0; i < wrinkles; i++) {
-        const wx = trunkStart + Math.random() * (dim.trunkLength - 5);
-        ctx.beginPath();
-        ctx.moveTo(wx, -hw + 7);
-        ctx.lineTo(wx + (Math.random() - 0.5) * 8, hw - 7);
-        ctx.stroke();
-      }
+      ctx.fillRect(trunkStart, -hw + 5, trunkLen, W - 10);
     }
   }
 
-  // Bumpers
-  const bumperDarkness = car.disabled ? 30 : 0;
-  ctx.fillStyle = `rgb(${100 - bumperDarkness}, ${100 - bumperDarkness}, ${100 - bumperDarkness})`;
-  ctx.fillRect(frontX - 3, -hw + 3, 5, W - 6);
-  ctx.fillStyle = `rgb(${85 - bumperDarkness}, ${85 - bumperDarkness}, ${85 - bumperDarkness})`;
-  ctx.fillRect(rearX - 1, -hw + 4, 5, W - 8);
-
-  // WHEELS - positioned 30% from each end (between original and v7 positions)
-  const wheelColor = getRearDamagePct(car) > 0.8 ? '#444' : '#111';
-  ctx.fillStyle = wheelColor;
-  const wheelW = 10 * CAR_SCALE;
-  const wheelH = 5 * CAR_SCALE;
-
-  // Front wheels: 30% from front (was at midpoint of hood in v7, was too close to center before)
-  const frontWheelX = halfLen - totalLen * 0.22;
-  // Rear wheels: 30% from rear
-  const rearWheelX = -halfLen + totalLen * 0.22;
-
-  // Front wheels with steering
-  ctx.save();
-  ctx.translate(frontWheelX, -hw - 1);
-  ctx.rotate(car.steerAngle * 0.4);
-  ctx.fillRect(-wheelW / 2, -wheelH / 2, wheelW, wheelH);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(frontWheelX, hw + 1);
-  ctx.rotate(car.steerAngle * 0.4);
-  ctx.fillRect(-wheelW / 2, -wheelH / 2, wheelW, wheelH);
-  ctx.restore();
-
-  // Rear wheels
-  const rearWheelH = getRearDamagePct(car) > 0.9 ? wheelH * 0.4 : wheelH;
-  ctx.fillRect(rearWheelX - wheelW / 2, -hw - 2, wheelW, rearWheelH);
-  ctx.fillRect(rearWheelX - wheelW / 2, hw + 2 - rearWheelH, wheelW, rearWheelH);
-
-  // Headlights
-  if (!car.disabled && dim.hoodLength > 6) {
-    ctx.fillStyle = '#ffe';
-    ctx.beginPath();
-    ctx.ellipse(frontX - 5, -hw + 6, 3, 2.5, 0, 0, Math.PI * 2);
-    ctx.ellipse(frontX - 5, hw - 6, 3, 2.5, 0, 0, Math.PI * 2);
-    ctx.fill();
+  // Headlights: a lamp breaks once its corner has caved in
+  const leftLampOut = (d.front[0] + d.front[1]) / 2 - fAvg * 0.5 > 3 || frontPct > 0.75;
+  const rightLampOut = (d.front[d.front.length - 1] + d.front[d.front.length - 2]) / 2 - fAvg * 0.5 > 3 || frontPct > 0.75;
+  if (dim.hoodLength > 6) {
+    [[-hw + 6, leftLampOut], [hw - 6, rightLampOut]].forEach(([ly, out]) => {
+      ctx.fillStyle = out ? '#222' : (car.disabled ? '#776' : '#ffe');
+      ctx.beginPath();
+      ctx.ellipse(frontX - 5, ly, 3, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 
   // Taillights
   if (dim.trunkLength > 5) {
-    ctx.fillStyle = car.disabled ? '#600' : '#c00';
+    const tailOut = rearPct > 0.6;
+    ctx.fillStyle = tailOut ? '#300' : (car.disabled ? '#600' : '#c00');
     ctx.beginPath();
     ctx.roundRect(rearX + 2, -hw + 5, 4, 5, 1);
     ctx.roundRect(rearX + 2, hw - 10, 4, 5, 1);
@@ -260,6 +241,23 @@ function drawCar(car) {
   ctx.textBaseline = 'middle';
   ctx.fillText(car.carNumber.toString().padStart(2, '0'), 0, 0);
 
+  // Fold lines in the sheet metal (persistent): dark crease + light edge
+  car.creases.forEach(c => {
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = `rgba(0,0,0,${0.3 + c.depth * 0.4})`;
+    ctx.beginPath();
+    ctx.moveTo(c.x1, c.y1);
+    ctx.lineTo(c.x2, c.y2);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(255,255,255,${0.08 + c.depth * 0.15})`;
+    ctx.beginPath();
+    ctx.moveTo(c.x1 + 1, c.y1 + 1);
+    ctx.lineTo(c.x2 + 1, c.y2 + 1);
+    ctx.stroke();
+  });
+
   // Dents (legacy)
   ctx.fillStyle = 'rgba(0,0,0,0.2)';
   car.dents.slice(-8).forEach(dent => {
@@ -271,24 +269,21 @@ function drawCar(car) {
   // Impact marks (scratches and dents)
   car.impactMarks.forEach(mark => {
     if (mark.type === 'scratch') {
-      // Draw scratch lines
       ctx.strokeStyle = `rgba(40, 40, 40, ${0.4 + mark.severity * 0.4})`;
       ctx.lineWidth = 1 + mark.severity;
       ctx.lineCap = 'round';
       ctx.beginPath();
       const scratchLen = 8 + mark.severity * 12;
-      const angle = Math.random() * Math.PI;
+      const angle = mark.angle ?? 0.5; // fixed per mark so scratches don't flicker
       ctx.moveTo(mark.x - Math.cos(angle) * scratchLen/2, mark.y - Math.sin(angle) * scratchLen/2);
       ctx.lineTo(mark.x + Math.cos(angle) * scratchLen/2, mark.y + Math.sin(angle) * scratchLen/2);
       ctx.stroke();
     } else {
-      // Draw dent (darker circular area with highlight edge)
       const dentSize = 4 + mark.severity * 6;
       ctx.fillStyle = `rgba(0, 0, 0, ${0.2 + mark.severity * 0.25})`;
       ctx.beginPath();
       ctx.ellipse(mark.x, mark.y, dentSize, dentSize * 0.7, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Highlight edge
       ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 + mark.severity * 0.15})`;
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -297,14 +292,57 @@ function drawCar(car) {
     }
   });
 
+  // Grime and scorching build up with overall damage
+  if (totalPct > 0.05) {
+    ctx.fillStyle = `rgba(25, 18, 10, ${Math.min(0.45, totalPct * 0.5)})`;
+    ctx.fillRect(-halfLen - 15, -hw - 2, totalLen + 30, W + 4);
+  }
+
   // Hit flash effect (white overlay that fades)
   const flashAge = frameCount - car.lastHitFlash;
   if (flashAge < 8) {
     ctx.fillStyle = `rgba(255, 255, 255, ${(8 - flashAge) / 16})`;
-    ctx.beginPath();
-    ctx.roundRect(-halfLen, -hw, totalLen, W, 4);
-    ctx.fill();
+    ctx.fillRect(-halfLen - 15, -hw - 2, totalLen + 30, W + 4);
   }
+
+  ctx.restore(); // end body clip
+
+  // Bumpers follow the crumpled ends
+  const bumperShade = car.disabled ? 70 : 100;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = `rgb(${bumperShade},${bumperShade},${bumperShade})`;
+  ctx.beginPath();
+  frontEdge.forEach((p, i) => i ? ctx.lineTo(p.x - 1, p.y) : ctx.moveTo(p.x - 1, p.y));
+  ctx.stroke();
+  ctx.strokeStyle = `rgb(${bumperShade - 15},${bumperShade - 15},${bumperShade - 15})`;
+  ctx.beginPath();
+  rearEdge.forEach((p, i) => i ? ctx.lineTo(p.x + 1, p.y) : ctx.moveTo(p.x + 1, p.y));
+  ctx.stroke();
+
+  // WHEELS - 22% in from each end
+  ctx.fillStyle = rearPct > 0.8 ? '#444' : '#111';
+  const wheelW = 10 * CAR_SCALE;
+  const wheelH = 5 * CAR_SCALE;
+  const frontWheelX = halfLen - totalLen * 0.22;
+  const rearWheelX = -halfLen + totalLen * 0.22;
+
+  // Front wheels show the steering actually reaching the road, so a bent
+  // car visibly toes off to one side
+  const wheelSteer = (car.effSteer ?? car.steerAngle) * 0.4;
+  [[-hw - 1], [hw + 1]].forEach(([wy]) => {
+    ctx.save();
+    ctx.translate(frontWheelX, wy);
+    ctx.rotate(wheelSteer);
+    ctx.fillRect(-wheelW / 2, -wheelH / 2, wheelW, wheelH);
+    ctx.restore();
+  });
+
+  // Rear wheels
+  const rearWheelH = rearPct > 0.9 ? wheelH * 0.4 : wheelH;
+  ctx.fillRect(rearWheelX - wheelW / 2, -hw - 2, wheelW, rearWheelH);
+  ctx.fillRect(rearWheelX - wheelW / 2, hw + 2 - rearWheelH, wheelW, rearWheelH);
 
   ctx.restore();
 

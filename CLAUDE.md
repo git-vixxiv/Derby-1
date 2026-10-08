@@ -41,9 +41,10 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 **Features shipped:**
 - Front-axle steering physics with realistic pivot behavior
 - Oriented Bounding Box (OBB / SAT) collision detection
-- Momentum-based collision response with angular impulse
+- Momentum-based collision response with angular impulse. Impulse goes into drive speed along the direction of travel (a rammer is stopped by the hit) and the rest into knockback. v10 fixed an inverted approach test that made head-on rams deal no damage.
+- Mud traction: direction of travel (`moveAngle`) lags heading, so cars slide through turns; less grip at speed and with damage. Front damage pulls steering toward the hit side and adds wheel wobble.
 - Per-zone damage (front/side/rear) with separate HP pools
-- Visual damage accumulation — persistent scratches and dents in car-local space
+- Visual damage accumulation — per-car deformation profile (`car.deform`): body outline caves in where hit, persistent creases, buckled hood, broken lamps, bent bumpers, grime; plus scratches/dents in car-local space
 - Particle systems: sparks, debris, paint chips, smoke, fire
 - Synthesized audio (no files): 12 pre-rendered crash buffers (3 weight classes × 4 variations) built from noise only — body thud, broadband crunch, crunch driven through a resonant filter bank for the steel-panel clang, debris ticks, hard saturation. Stereo-panned, volume scales with impact. Metal scrape loop for sustained contact. V8 engine loop of unpitched exhaust pops (pitch comes from firing rate only), rev at the line during countdown, muffled field-engine bed. Master compressor. `M` to mute (localStorage key `demolitionDerbyMuted`). **Avoid short tonal components** (damped sines, pitch sweeps): Joe heard them as water splashes and a horn.
 - AI opponents with state machine: scanning, approaching, positioning, charging, retreating, unsticking
@@ -64,16 +65,22 @@ These were tuned iteratively with Joe providing direct feedback. v9/v10 are sign
 
 ```javascript
 BASE_ACCELERATION: 0.08         // doubled from 0.04: top speed in ~63% of arena width
-MAX_FORWARD_SPEED: 9
-MAX_REVERSE_SPEED: 9            // same as forward when healthy
+MAX_FORWARD_SPEED: 6            // v10: cut from 9 (Joe: "way too fast")
+MAX_REVERSE_SPEED: 6            // same as forward when healthy
 ROLLING_FRICTION: 0.975
 MUD_DRAG: 0.965
 MAX_STEER_ANGLE: 0.42
-STEER_SPEED: 0.055
+STEER_SPEED: 0.04               // v10: was 0.055
 STEER_RETURN_SPEED: 0.08
 MIN_SPEED_TO_TURN: 0.15         // steering only works while moving
 SLIDE_FRICTION: 0.85
 ANGULAR_FRICTION: 0.82
+MUD_GRIP: 0.11                  // v10: travel direction chases heading at this rate/frame
+GRIP_LOSS_AT_TOP_SPEED: 0.45
+GRIP_LOSS_FROM_DAMAGE: 0.4
+SLIDE_SCRUB: 0.05
+DAMAGE_PULL_MAX: 0.07           // v10: steering pull (rad) at 100% front damage
+DAMAGE_WOBBLE_MAX: 0.08
 RESTITUTION: 0.35
 COLLISION_BIAS: 0.3
 ANGULAR_IMPULSE_SCALE: 0.012
@@ -84,7 +91,7 @@ CAR_SCALE: 1.2
 Tuned outside `PHYSICS` (in code, with history comments):
 
 - Post-impact velocity decay: `0.75` per frame (`physics.js`). Was 0.94, then 0.85.
-- Speed-bonus damage: `pow(speed - 2, 1.9) * 5` (`collision.js`). Speed-7 ram ≈ 108 bonus, max-speed ≈ 194.
+- Speed-bonus damage: `pow(speed - 2, 1.9) * 5` (`collision.js`), on the old top-speed-9 scale: all damage and crash-sound speeds are multiplied by `DAMAGE_SPEED_SCALE = 9 / MAX_FORWARD_SPEED` so a full-speed hit still does what it did at top speed 9. Measured: 90%-speed rear ram into a door = 165 side damage.
 - Wall damage: `impactSpeed * 3 * zoneMultiplier`, where impactSpeed is the velocity component into the wall (drive + slide + knockback) (`physics.js`, `WALL_DAMAGE_PER_SPEED`). The zone is the part of the car that hits the wall (front 1.4×, side 0.8×, rear 0.5×, divided by model strength), not which wall was hit.
 
 ## Car roster (v10 first-pass stats — awaiting Joe's tuning)

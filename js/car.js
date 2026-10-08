@@ -117,11 +117,77 @@ function createCar(x, y, angle, isPlayer = false, colorIndex = 0, totalCars = 1)
 
     dents: [],
     impactMarks: [],  // Persistent scratches and damage marks
+    // Persistent body deformation (car-local, inward depth in px at
+    // evenly spaced points along each edge). Built up hit by hit.
+    deform: {
+      front: new Array(DEFORM_END_POINTS).fill(0),
+      rear: new Array(DEFORM_END_POINTS).fill(0),
+      sideNeg: new Array(DEFORM_SIDE_POINTS).fill(0), // y < 0 edge
+      sidePos: new Array(DEFORM_SIDE_POINTS).fill(0)  // y > 0 edge
+    },
+    creases: [],      // Persistent fold lines in the sheet metal
+    pullDir: 0,       // Which way bent steering pulls (set by front hits)
+    effSteer: 0,      // Steering actually reaching the road (incl. pull/wobble)
     lastHitFlash: 0,  // Frame when last hit for flash effect
     smokeTimer: 0,
     trackTimer: 0
   };
 }
+
+// ==================== BODY DEFORMATION ====================
+const DEFORM_END_POINTS = 7;
+const DEFORM_SIDE_POINTS = 9;
+
+// Push the body in around the contact point. dmg is the HP just taken
+// by that zone. Deformation is spread with a bell curve around the hit,
+// randomized a little so no two crumples look alike, and capped so the
+// car never folds through itself.
+function addDeformation(car, contactPoint, zone, dmg) {
+  if (!car.deform || dmg <= 0) return;
+  const type = car.carType;
+  const local = vecRotate(vecSub(contactPoint, vec(car.x, car.y)), -car.angle);
+  const halfLen = type.length / 2;
+  const hw = type.width / 2;
+
+  const spread = (arr, pos, start, step, sigma, amount, cap) => {
+    for (let i = 0; i < arr.length; i++) {
+      const p = start + i * step;
+      const w = Math.exp(-((p - pos) ** 2) / (2 * sigma * sigma));
+      arr[i] = Math.min(cap, arr[i] + amount * w * (0.75 + Math.random() * 0.5));
+    }
+  };
+
+  if (zone === 'front') {
+    const amount = (dmg / car.maxFrontDamage) * type.hoodLength * 1.6;
+    spread(car.deform.front, local.y, -hw, type.width / (DEFORM_END_POINTS - 1), type.width * 0.3, amount, type.hoodLength * 0.55);
+    // Bent tie rod pulls toward the side that took the hit
+    if (Math.abs(local.y) > hw * 0.2) car.pullDir = Math.sign(local.y);
+    else if (!car.pullDir) car.pullDir = Math.random() < 0.5 ? -1 : 1;
+  } else if (zone === 'rear') {
+    const amount = (dmg / car.maxRearDamage) * type.trunkLength * 1.6;
+    spread(car.deform.rear, local.y, -hw, type.width / (DEFORM_END_POINTS - 1), type.width * 0.3, amount, type.trunkLength * 0.55);
+  } else {
+    const arr = local.y < 0 ? car.deform.sideNeg : car.deform.sidePos;
+    const amount = (dmg / car.maxSideDamage) * 22;
+    spread(arr, local.x, -halfLen, type.length / (DEFORM_SIDE_POINTS - 1), type.length * 0.14, amount, type.width * 0.24);
+  }
+
+  // A fold line in the metal near the hit, kept for the life of the car
+  if (dmg > 8) {
+    const ang = (zone === 'side' ? 0.3 : Math.PI / 2 - 0.3) + (Math.random() - 0.5) * 0.9;
+    const len = 6 + Math.min(16, dmg * 0.15);
+    const cx = clamp(local.x * 0.85, -halfLen + 4, halfLen - 4);
+    const cy = clamp(local.y * 0.7, -hw + 3, hw - 3);
+    car.creases.push({
+      x1: cx - Math.cos(ang) * len / 2, y1: cy - Math.sin(ang) * len / 2,
+      x2: cx + Math.cos(ang) * len / 2, y2: cy + Math.sin(ang) * len / 2,
+      depth: Math.min(1, dmg / 60)
+    });
+    if (car.creases.length > 24) car.creases.shift();
+  }
+}
+
+function avg(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
 
 // ==================== CAR HEALTH / DAMAGE STATE ====================
 function getFrontDamagePct(car) { return car.frontDamage / car.maxFrontDamage; }
