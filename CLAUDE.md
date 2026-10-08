@@ -18,14 +18,14 @@ Joe owns product direction and testing. Joe has deep domain knowledge of real-wo
 4. **Realistic damage zones.** Front (engine) is most critical, rear is most protected, sides are in between. Damage visibly accumulates with persistent scratches and dents.
 5. **No roleplay, no gimmicks.** This is a serious arcade recreation, not a cartoon.
 
-## Current state (v9, post-refactor)
+## Current state (v10)
 
 Modular build:
 - `index.html` (~131 lines) — HTML structure + ordered `<script>` tags
 - `css/styles.css`
 - `js/config.js` — ARENA_*, WALL_THICKNESS, CAR_SCALE, CONTACT_TIMEOUT, PHYSICS, CAR_TYPES
 - `js/math.js` — vector math, hsl, dist, normAngle, clamp, formatTime, getUniqueNumber/Color
-- `js/audio.js` — initAudio, crash buffer synthesis, engine sound, muteEngine
+- `js/audio.js` — master bus + compressor, V8 engine loop (player + field), layered crash buffers, metal scrape, countdown tick + start horn, mute toggle
 - `js/car.js` — geometry, createCar, damage % helpers, modifiers (speed/accel/steer)
 - `js/collision.js` — SAT detection, OBB checks, resolveCollision, applyDamage, getZoneDamageMultiplier, spawnDamagePopup
 - `js/physics.js` — updateCarPhysics
@@ -45,8 +45,7 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Per-zone damage (front/side/rear) with separate HP pools
 - Visual damage accumulation — persistent scratches and dents in car-local space
 - Particle systems: sparks, debris, paint chips, smoke, fire
-- 5-layer procedural crash sound system (instant playback via pre-computed buffers)
-- Engine sound responsive to speed and throttle
+- Synthesized audio (no files): 12 pre-rendered crash buffers (3 weight classes × 4 variations, stereo-panned, volume scales with impact), metal scrape loop for sustained contact, V8 exhaust-pulse engine loop tracking RPM (rev at the line during countdown), muffled field-engine bed, countdown ticks + air horn, master compressor, `M` to mute (localStorage key `demolitionDerbyMuted`)
 - AI opponents with state machine: scanning, approaching, positioning, charging, retreating, unsticking
 - 45-second contact timer — must hit someone every 45s or you're disqualified
 - Cars start around arena perimeter facing outward (authentic derby start)
@@ -56,14 +55,15 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Power-ups: wrench (repair) and boost
 - Multiple rounds with increasing car counts (8 + 2×level, capped at 14)
 - Mud tracks, arena environment
+- Per-model car stats (weight, acceleration, top speed, front/rear strength) — first pass, see roster below
 - High score persistence via localStorage (key: `demolitionDerbyHighScoreV9`)
 
-## Physics constants — current tuning (v9)
+## Physics constants — current tuning (v10)
 
-These were tuned iteratively with Joe providing direct feedback. v9 is significantly faster and grippier than earlier versions; do not revert toward older values without explicit approval. Any change to these requires testing and approval.
+These were tuned iteratively with Joe providing direct feedback. v9/v10 are significantly faster and grippier than earlier versions; do not revert toward older values without explicit approval. Any change to these requires testing and approval.
 
 ```javascript
-BASE_ACCELERATION: 0.04
+BASE_ACCELERATION: 0.08         // doubled from 0.04: top speed in ~63% of arena width
 MAX_FORWARD_SPEED: 9
 MAX_REVERSE_SPEED: 9            // same as forward when healthy
 ROLLING_FRICTION: 0.975
@@ -72,7 +72,7 @@ MAX_STEER_ANGLE: 0.42
 STEER_SPEED: 0.055
 STEER_RETURN_SPEED: 0.08
 MIN_SPEED_TO_TURN: 0.15         // steering only works while moving
-SLIDE_FRICTION: 0.72
+SLIDE_FRICTION: 0.85
 ANGULAR_FRICTION: 0.82
 RESTITUTION: 0.35
 COLLISION_BIAS: 0.3
@@ -81,9 +81,27 @@ CONTACT_TIMEOUT: 45 * 60        // 45 seconds at 60fps
 CAR_SCALE: 1.2
 ```
 
-## Car roster (all stats currently identical — cosmetic-only differences)
+Tuned outside `PHYSICS` (in code, with history comments):
 
-Crown Vic, Town Car, Impala, Imperial, Wagon, LeSabre, DeVille, Delta 88. All eight have `frontStrength: 1.0, rearStrength: 1.0, weight: 1.0, acceleration: 1.0, topSpeed: 1.0`. Only visual proportions (hood/trunk/cabin lengths) and body style (sedan vs wagon) vary. Differentiating these stats is a reasonable future direction but must be approved first — it would shift the game's balance.
+- Post-impact velocity decay: `0.75` per frame (`physics.js`). Was 0.94, then 0.85.
+- Speed-bonus damage: `pow(speed - 2, 1.9) * 5` (`collision.js`). Speed-7 ram ≈ 108 bonus, max-speed ≈ 194.
+
+## Car roster (v10 first-pass stats — awaiting Joe's tuning)
+
+`frontStrength`/`rearStrength` divide incoming zone damage (higher = tougher). `weight` is collision mass. `acceleration`/`topSpeed` multiply the PHYSICS values.
+
+| Model | weight | accel | top | front | rear | identity |
+|---|---|---|---|---|---|---|
+| Crown Vic | 1.00 | 1.05 | 1.03 | 1.00 | 1.00 | quick all-rounder |
+| Town Car | 1.08 | 0.97 | 1.00 | 1.00 | 1.05 | heavy cruiser |
+| Impala | 0.94 | 1.08 | 1.04 | 0.92 | 0.95 | light and fast, fragile |
+| Imperial | 1.20 | 0.88 | 0.95 | 1.20 | 1.10 | tank, slow off the line |
+| Wagon | 1.12 | 0.92 | 0.97 | 0.95 | 1.25 | long tail, rear-ram specialist |
+| LeSabre | 0.96 | 1.03 | 1.00 | 0.97 | 0.97 | nimble mid-size |
+| DeVille | 1.15 | 0.92 | 0.98 | 1.08 | 1.05 | heavy luxury bruiser |
+| Delta 88 | 1.02 | 1.00 | 1.00 | 1.02 | 1.00 | balanced baseline |
+
+Visual proportions (hood/trunk/cabin) and body style also vary. Any change to these numbers shifts balance — get Joe's approval.
 
 ## File structure
 
@@ -94,7 +112,7 @@ If you add a new module, append a `<script src="js/your-module.js"></script>` li
 ## Roadmap (not prioritized — discuss before starting)
 
 - ~~Split monolithic `index.html` into modules~~ — done in `refactor/module-split` branch
-- Differentiated car stats (weight, acceleration, durability per model)
+- ~~Differentiated car stats~~ — first pass shipped in v10, tuning pending
 - Weather effects (rain, mud, reduced visibility)
 - Championship mode (multi-round tournament with persistent damage between rounds)
 - Strategic power-ups beyond repair/boost: engine cooling, reinforced bumpers
