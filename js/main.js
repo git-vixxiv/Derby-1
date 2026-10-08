@@ -39,6 +39,8 @@ function gameLoop() {
     if (countdownTimer >= 60) {
       countdownTimer = 0;
       countdownValue--;
+      if (countdownValue > 0) playCountdownTick();
+      else if (countdownValue === 0) playStartHorn();
       if (countdownValue < 0) {
         gameState = 'playing';
         roundStartTime = Date.now();
@@ -46,6 +48,10 @@ function gameLoop() {
         document.getElementById('countdown-overlay').classList.add('hidden');
       }
     }
+
+    // Engines idle at the line; holding gas or reverse revs in place
+    updateEngineSound(0, controls.gas || controls.reverse);
+    updateFieldSound(enemies);
 
     drawArena();
     disabledCars.forEach(drawCar);
@@ -127,6 +133,9 @@ function gameLoop() {
       }
     }
   }
+
+  updateFieldSound(enemies);
+  updateScrapeSound();
 
   // Check for newly disabled cars
   enemies.forEach(enemy => {
@@ -323,6 +332,7 @@ document.addEventListener('keydown', e => {
     case 'd': case 'arrowright': controls.right = true; break;
     case 'w': case 'arrowup': controls.gas = true; break;
     case 's': case 'arrowdown': controls.reverse = true; break;
+    case 'm': if (!e.repeat) toggleMute(); break;
   }
 });
 

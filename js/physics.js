@@ -134,7 +134,7 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
 
   // Wall crash sound for player
   if (hitWall && car.isPlayer && absSpeed > 1) {
-    playCrashSound(absSpeed * 0.8);
+    playCrashSound(absSpeed * 0.8, car.x);
   }
 
   // Mud tracks

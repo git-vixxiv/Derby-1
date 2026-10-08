@@ -124,6 +124,13 @@ function resolveCollision(car1, car2, collision) {
   // Relative velocity along collision normal
   const velAlongNormal = vecDot(relVel, collision.normal);
 
+  // Sustained player contact grinds: feed the scrape loop with the
+  // sliding (tangential) speed plus a share of the shove
+  if (car1.isPlayer || car2.isPlayer) {
+    const tangential = vecSub(relVel, vecMul(collision.normal, velAlongNormal));
+    addScrape(Math.hypot(tangential.x, tangential.y) + Math.abs(velAlongNormal) * 0.3);
+  }
+
   // Don't resolve impulse if velocities are separating (but contact already credited above)
   if (velAlongNormal > 0) {
     // Still need to separate overlapping cars
@@ -189,10 +196,12 @@ function resolveCollision(car1, car2, collision) {
   // Sparks at contact point
   spawnSparks(collision.contactPoint.x, collision.contactPoint.y, 4 + Math.floor(impactForce * 0.3));
 
-  // Crash sound - louder for player involvement or harder hits
+  // Crash sound - louder for player involvement or harder hits.
+  // Light contact below the threshold is left to the scrape loop so
+  // shoving matches don't machine-gun crash samples.
   const playerInvolved = car1.isPlayer || car2.isPlayer;
-  if (impactForce > 1 || playerInvolved) {
-    playCrashSound(impactForce * (playerInvolved ? 1.2 : 0.6));
+  if (impactForce > 0.8) {
+    playCrashSound(impactForce * (playerInvolved ? 1.2 : 0.6), collision.contactPoint.x);
   }
 }
 
