@@ -78,7 +78,7 @@ function drawHealthBar(car) {
     ctx.fillStyle = '#f5a623';
     ctx.font = 'bold 10px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('â˜…', car.x, barY - 4);
+    ctx.fillText('★', car.x, barY - 4);
   }
 }
 
@@ -360,7 +360,7 @@ function drawCar(car) {
     ctx.fillStyle = '#f1c40f';
     ctx.font = 'bold 11px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('â—€â—€ REVERSE', car.x, car.y + hw + 18);
+    ctx.fillText('◀◀ REVERSE', car.x, car.y + hw + 18);
   }
 }
 

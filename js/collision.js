@@ -344,8 +344,8 @@ function spawnDamagePopup(x, y, damage, color) {
 
 function getZoneDamageMultiplier(zone, type) {
   switch (zone) {
-    case 'front': return 1.4 * type.frontStrength;
-    case 'rear': return 0.5 * type.rearStrength;
+    case 'front': return 1.4 / type.frontStrength;
+    case 'rear': return 0.5 / type.rearStrength;
     case 'side': return 0.8;
     default: return 1.0;
   }
