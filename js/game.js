@@ -92,7 +92,6 @@ function startCountdown() {
   countdownValue = 5;
   countdownTimer = 0;
   gameState = 'countdown';
-  playCountdownTick();
   showOverlay('none');
   document.getElementById('hud-panel').classList.add('active');
   document.getElementById('countdown-overlay').classList.remove('hidden');

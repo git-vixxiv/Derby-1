@@ -25,7 +25,7 @@ Modular build:
 - `css/styles.css`
 - `js/config.js` — ARENA_*, WALL_THICKNESS, CAR_SCALE, CONTACT_TIMEOUT, PHYSICS, CAR_TYPES
 - `js/math.js` — vector math, hsl, dist, normAngle, clamp, formatTime, getUniqueNumber/Color
-- `js/audio.js` — master bus + compressor, V8 engine loop (player + field), layered crash buffers, metal scrape, countdown tick + start horn, mute toggle
+- `js/audio.js` — master bus + compressor, V8 engine loop (player + field), layered crash buffers, metal scrape, mute toggle
 - `js/car.js` — geometry, createCar, damage % helpers, modifiers (speed/accel/steer)
 - `js/collision.js` — SAT detection, OBB checks, resolveCollision, applyDamage, getZoneDamageMultiplier, spawnDamagePopup
 - `js/physics.js` — updateCarPhysics
@@ -45,7 +45,7 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Per-zone damage (front/side/rear) with separate HP pools
 - Visual damage accumulation — persistent scratches and dents in car-local space
 - Particle systems: sparks, debris, paint chips, smoke, fire
-- Synthesized audio (no files): 12 pre-rendered crash buffers (3 weight classes × 4 variations, stereo-panned, volume scales with impact), metal scrape loop for sustained contact, V8 exhaust-pulse engine loop tracking RPM (rev at the line during countdown), muffled field-engine bed, countdown ticks + air horn, master compressor, `M` to mute (localStorage key `demolitionDerbyMuted`)
+- Synthesized audio (no files): 12 pre-rendered crash buffers (3 weight classes × 4 variations) built from noise only — body thud, broadband crunch, crunch driven through a resonant filter bank for the steel-panel clang, debris ticks, hard saturation. Stereo-panned, volume scales with impact. Metal scrape loop for sustained contact. V8 engine loop of unpitched exhaust pops (pitch comes from firing rate only), rev at the line during countdown, muffled field-engine bed. Master compressor. `M` to mute (localStorage key `demolitionDerbyMuted`). **Avoid short tonal components** (damped sines, pitch sweeps): Joe heard them as water splashes and a horn.
 - AI opponents with state machine: scanning, approaching, positioning, charging, retreating, unsticking
 - 45-second contact timer — must hit someone every 45s or you're disqualified
 - Cars start around arena perimeter facing outward (authentic derby start)

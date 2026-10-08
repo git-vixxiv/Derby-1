@@ -39,8 +39,6 @@ function gameLoop() {
     if (countdownTimer >= 60) {
       countdownTimer = 0;
       countdownValue--;
-      if (countdownValue > 0) playCountdownTick();
-      else if (countdownValue === 0) playStartHorn();
       if (countdownValue < 0) {
         gameState = 'playing';
         roundStartTime = Date.now();

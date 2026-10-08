@@ -8,7 +8,6 @@
 //   - Field engines: same buffer, two detuned copies, the rest of the cars
 //   - Scrape: looped grinding noise, level fed by sustained metal contact
 //   - Crashes: 12 pre-rendered buffers (3 weights x 4 variations)
-//   - Countdown ticks + starting air horn
 let audioCtx = null;
 let soundEnabled = false;
 let soundMuted = localStorage.getItem('demolitionDerbyMuted') === '1';
@@ -72,6 +71,11 @@ function toggleMute() {
 // odd cylinders on the left bank. Firing every 90° of crank overall, but
 // each bank sees uneven gaps (270/180/90/180°) — that unevenness is the
 // V8 burble. Left bank leans left channel, right bank leans right.
+//
+// Each pulse is an unpitched exhaust "pop" (filtered noise plus a single
+// low push), so the only pitch you hear is the firing rate itself. An
+// earlier version rang a fixed tone on every pulse, which turned into a
+// horn-like note when revved.
 function createEngineBuffer() {
   const sr = audioCtx.sampleRate;
   const idleRpm = 750;
@@ -85,7 +89,8 @@ function createEngineBuffer() {
   const firingOrder = [1, 8, 4, 3, 6, 5, 7, 2];
   // Fixed per-cylinder strength offsets: no real engine fires perfectly even
   const cylTrim = [0, 0.05, -0.07, 0.03, -0.04, 0.08, -0.02, 0.06, -0.05];
-  const pulseLen = Math.floor(sr * 0.045);
+  const pulseLen = Math.floor(sr * 0.03);
+  const pushLen = Math.floor(sr * 0.007); // half-cycle of ~70Hz: a push, not a tone
 
   for (let c = 0; c < cycles; c++) {
     for (let k = 0; k < 8; k++) {
@@ -93,17 +98,17 @@ function createEngineBuffer() {
       const leftBank = cyl % 2 === 1;
       const jitter = (Math.random() - 0.5) * 0.04; // ±2% of a firing slot
       const start = Math.floor(((c * 8 + k + jitter) / (cycles * 8)) * len);
-      const amp = (1 + cylTrim[cyl]) * (0.88 + Math.random() * 0.24);
-      const ring = 105 + Math.random() * 15; // exhaust pipe resonance
-      let noiseLp = 0;
+      const amp = (1 + cylTrim[cyl]) * (0.85 + Math.random() * 0.3);
+      const lpCoef = 0.08 + Math.random() * 0.06; // darker or brighter pop
+      let lp1 = 0, lp2 = 0;
       for (let i = 0; i < pulseLen; i++) {
         const t = i / sr;
-        const attack = Math.min(1, i / (sr * 0.0015));
-        noiseLp = noiseLp * 0.6 + (Math.random() * 2 - 1) * 0.4;
-        const s = attack * amp * (
-          Math.exp(-t * 55) * Math.sin(2 * Math.PI * ring * t) * 0.85 +
-          Math.exp(-t * 140) * noiseLp * 0.45
-        );
+        const attack = Math.min(1, i / (sr * 0.001));
+        lp1 += ((Math.random() * 2 - 1) - lp1) * lpCoef;
+        lp2 += (lp1 - lp2) * lpCoef;
+        const pop = lp2 * Math.exp(-t * 110) * 2.2;
+        const push = i < pushLen ? Math.sin(Math.PI * i / pushLen) * 0.7 : 0;
+        const s = attack * amp * (pop + push);
         // Wrap around so the loop point is seamless
         const idx = (start + i) % len;
         L[idx] += s * (leftBank ? 1 : 0.65);
@@ -112,6 +117,7 @@ function createEngineBuffer() {
     }
   }
 
+  removeDC(buffer);
   normalizeBuffer(buffer, 0.9);
   return buffer;
 }
@@ -261,19 +267,19 @@ function updateScrapeSound() {
 }
 
 // ==================== CRASHES ====================
-// Layers, each tuned per weight class:
-//   thump   — pitch-dropping low sine, the chassis taking the hit
-//   smack   — short low-passed noise burst, the initial contact
-//   crumple — hundreds of tiny damped resonances = sheet metal folding
-//   ring    — quiet inharmonic panel modes (kept low: real, not cartoon)
-//   glass   — sparse high clicks trailing a big hit
-//   settle  — low rumble tail as the cars rock back
+// Built from noise, not tones — anything tonal and short reads as water
+// drops or cartoon boings. Layers, each tuned per weight class:
+//   body    — unpitched low thud (low-passed noise), the chassis taking the hit
+//   crunch  — dense broadband crackle = sheet metal tearing and folding
+//   metal   — the crunch driven through a bank of resonant filters at
+//             inharmonic frequencies: the clang of steel panels
+//   debris  — sparse bright ticks trailing a big hit (glass, trim)
+// Everything is then saturated hard, the way a real crash recording is.
 const CRASH_TIERS = {
-  light:  { dur: 0.35, thumpF: 140, thumpDecay: 26, thumpAmp: 0.55, smackLp: 0.45, grains: 18,  crumpleDur: 0.10, ringBase: [320, 480], ringDecay: 22, ringAmp: 0.08, glass: 0,  settle: 0.05 },
-  medium: { dur: 0.7,  thumpF: 115, thumpDecay: 16, thumpAmp: 0.8,  smackLp: 0.35, grains: 70,  crumpleDur: 0.28, ringBase: [220, 340], ringDecay: 12, ringAmp: 0.11, glass: 6,  settle: 0.12 },
-  heavy:  { dur: 1.2,  thumpF: 95,  thumpDecay: 10, thumpAmp: 1.0,  smackLp: 0.28, grains: 170, crumpleDur: 0.55, ringBase: [150, 250], ringDecay: 7,  ringAmp: 0.14, glass: 30, settle: 0.25 }
+  light:  { dur: 0.45, bodyAmp: 0.6, bodyDecay: 28, crunchDur: 0.08, crunchDensity: 900,  modes: 14, modeLo: 500, modeHi: 5000, modeDecay: 0.10, metalAmp: 0.9, debris: 0,  drive: 2.2, tone: 0.55 },
+  medium: { dur: 0.8,  bodyAmp: 1.5,  bodyDecay: 18, crunchDur: 0.22, crunchDensity: 1400, modes: 18, modeLo: 350, modeHi: 4500, modeDecay: 0.20, metalAmp: 1.0, debris: 10, drive: 2.8, tone: 0.45 },
+  heavy:  { dur: 1.3,  bodyAmp: 2.0, bodyDecay: 11, crunchDur: 0.45, crunchDensity: 1800, modes: 22, modeLo: 250, modeHi: 4000, modeDecay: 0.32, metalAmp: 1.1, debris: 28, drive: 3.4, tone: 0.38 }
 };
-const RING_RATIOS = [1, 1.58, 2.31, 3.17, 4.41, 5.6];
 
 function createCrashBuffers() {
   Object.keys(CRASH_TIERS).forEach(tierName => {
@@ -288,83 +294,116 @@ function renderCrash(tier) {
   const len = Math.floor(sr * tier.dur);
   const buffer = audioCtx.createBuffer(2, len, sr);
 
-  // Shared between channels so the body of the hit sits dead center
-  const thumpStart = tier.thumpF * (0.9 + Math.random() * 0.2);
-  const ringBase = tier.ringBase[0] + Math.random() * (tier.ringBase[1] - tier.ringBase[0]);
-  const modes = RING_RATIOS.map((r, k) => ({
-    f: ringBase * r * (0.97 + Math.random() * 0.06),
-    amp: 1 / (k + 1),
-    decay: tier.ringDecay * (1 + k * 0.4),
-    phase: Math.random() * Math.PI * 2
-  }));
+  // Panel resonances, shared by both channels so the clang sits centered.
+  // Log-spaced with jitter so no two are harmonically related.
+  const modes = [];
+  for (let k = 0; k < tier.modes; k++) {
+    const frac = (k + Math.random()) / tier.modes;
+    modes.push({
+      f: tier.modeLo * Math.pow(tier.modeHi / tier.modeLo, frac),
+      q: 12 + Math.random() * 25,
+      gain: 0.5 + Math.random() * 0.8
+    });
+  }
+
+  // Crunch event times shared by both channels (noise content differs)
+  const events = [];
+  const n = Math.floor(tier.crunchDensity * tier.crunchDur);
+  for (let e = 0; e < n; e++) {
+    const u = Math.random();
+    events.push({
+      start: Math.floor(sr * tier.crunchDur * u * u), // denser at the start
+      len: Math.floor(sr * (0.0003 + Math.random() * 0.002)),
+      amp: (0.2 + Math.random() * 0.8) * (1 - u * 0.7)
+    });
+  }
 
   for (let ch = 0; ch < 2; ch++) {
     const data = buffer.getChannelData(ch);
+    const crunch = new Float32Array(len);
 
-    // Thump + smack + ring + settle, sample by sample
-    let phase = 0;
-    let smackLp = 0;
-    let settleLp = 0;
+    // Opening blast of broadband noise, then the crackle events
+    for (let i = 0; i < Math.min(len, Math.floor(sr * 0.02)); i++) {
+      crunch[i] += (Math.random() * 2 - 1) * Math.exp(-i / sr * 150);
+    }
+    for (const ev of events) {
+      for (let i = 0; i < ev.len && ev.start + i < len; i++) {
+        crunch[ev.start + i] += (Math.random() * 2 - 1) * ev.amp;
+      }
+    }
+
+    // Metal: crunch through the resonator bank
+    const metal = new Float32Array(len);
+    for (const m of modes) {
+      const bp = makeBandpass(m.f, m.q, sr);
+      const decayQ = Math.exp(-1 / (sr * tier.modeDecay * (600 / m.f + 0.5)));
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0, env = 1;
+      for (let i = 0; i < len; i++) {
+        const x = crunch[i];
+        const y = bp.b0 * x + bp.b2 * x2 - bp.a1 * y1 - bp.a2 * y2;
+        x2 = x1; x1 = x; y2 = y1; y1 = y;
+        env *= decayQ;
+        metal[i] += y * m.gain * (0.4 + 0.6 * env);
+      }
+    }
+
+    // Body thud: two-stage low-passed noise, no pitch sweep
+    let b1 = 0, b2 = 0;
+    // Debris ticks
+    const debrisTimes = [];
+    for (let d = 0; d < tier.debris; d++) {
+      debrisTimes.push(Math.floor(sr * (0.06 + Math.pow(Math.random(), 1.4) * tier.dur * 0.6)));
+    }
+    let hp = 0, prevCr = 0, mix = 0, lpA = 0, lpB = 0;
     for (let i = 0; i < len; i++) {
       const t = i / sr;
-      const f = 45 + (thumpStart - 45) * Math.exp(-t * 30);
-      phase += 2 * Math.PI * f / sr;
-      const attack = Math.min(1, i / (sr * 0.002));
-      const thump = Math.sin(phase) * Math.exp(-t * tier.thumpDecay) * tier.thumpAmp;
-
-      smackLp += (Math.random() * 2 - 1 - smackLp) * tier.smackLp;
-      const smack = smackLp * Math.exp(-t * 45) * 0.9;
-
-      let ring = 0;
-      if (t > 0.004) {
-        for (const m of modes) ring += Math.sin(2 * Math.PI * m.f * t + m.phase) * m.amp * Math.exp(-t * m.decay);
-      }
-
-      settleLp += (Math.random() * 2 - 1 - settleLp) * 0.02;
-      const settle = settleLp * Math.exp(-t * 6) * tier.settle * 4;
-
-      data[i] = attack * (thump + smack + settle) + ring * tier.ringAmp;
+      b1 += ((Math.random() * 2 - 1) - b1) * 0.03;
+      b2 += (b1 - b2) * 0.03;
+      const attack = Math.min(1, i / (sr * 0.001));
+      const body = b2 * 4 * Math.exp(-t * tier.bodyDecay) * tier.bodyAmp * attack;
+      // High-passed crunch layered on top so the tearing stays audible
+      hp = 0.9 * (hp + crunch[i] - prevCr);
+      prevCr = crunch[i];
+      mix = body + metal[i] * tier.metalAmp * 1.1 + hp * 0.12;
+      // Gentle two-stage low-pass: keeps the tear, loses the hiss
+      lpA += (mix - lpA) * tier.tone;
+      lpB += (lpA - lpB) * tier.tone;
+      data[i] = lpB;
     }
-
-    // Crumple grains: denser at the start, thinning out
-    for (let g = 0; g < tier.grains; g++) {
-      const u = Math.random();
-      const start = Math.floor(sr * tier.crumpleDur * u * u);
-      const f = 400 + Math.random() * 2600;
-      const decay = 300 + Math.random() * 600;
-      const amp = (0.15 + Math.random() * 0.5) * (1 - u * 0.6) * (Math.random() < 0.5 ? -1 : 1);
-      const glen = Math.min(len - start, Math.floor(sr * 5 / decay));
-      for (let i = 0; i < glen; i++) {
-        const t = i / sr;
-        data[start + i] += Math.sin(2 * Math.PI * f * t) * Math.exp(-t * decay) * amp;
-      }
-    }
-
-    // Glass and loose trim landing after the hit
-    for (let g = 0; g < tier.glass; g++) {
-      const start = Math.floor(sr * (0.05 + Math.pow(Math.random(), 1.5) * (tier.dur * 0.6)));
-      const f = 3000 + Math.random() * 4000;
-      const amp = 0.06 + Math.random() * 0.14;
-      const glen = Math.min(len - start, Math.floor(sr * 0.004));
-      for (let i = 0; i < glen; i++) {
-        const t = i / sr;
-        data[start + i] += Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 1800) * amp;
+    for (const start of debrisTimes) {
+      const amp = 0.05 + Math.random() * 0.12;
+      let prev = 0;
+      for (let i = 0; i < Math.floor(sr * 0.0015) && start + i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        data[start + i] += (w - prev) * amp * Math.exp(-i / sr * 2500);
+        prev = w;
       }
     }
 
     // Short fade at the tail so the buffer never ends on a click
-    const fade = Math.floor(sr * 0.03);
+    const fade = Math.floor(sr * 0.05);
     for (let i = 0; i < fade; i++) data[len - 1 - i] *= i / fade;
   }
 
-  // Gentle saturation for weight, then level-match all buffers so the
-  // playback gain alone decides loudness
+  removeDC(buffer);
+  // Normalize, saturate hard, normalize again: level-matched buffers so
+  // the playback gain alone decides loudness
+  normalizeBuffer(buffer, 1);
   for (let ch = 0; ch < 2; ch++) {
     const data = buffer.getChannelData(ch);
-    for (let i = 0; i < len; i++) data[i] = Math.tanh(data[i] * 1.4);
+    const k = Math.tanh(tier.drive);
+    for (let i = 0; i < len; i++) data[i] = Math.tanh(data[i] * tier.drive) / k;
   }
   normalizeBuffer(buffer, 0.95);
   return buffer;
+}
+
+// RBJ band-pass (constant 0 dB peak gain), coefficients normalized by a0
+function makeBandpass(f, q, sr) {
+  const w0 = 2 * Math.PI * Math.min(f, sr * 0.45) / sr;
+  const alpha = Math.sin(w0) / (2 * q);
+  const a0 = 1 + alpha;
+  return { b0: alpha / a0, b2: -alpha / a0, a1: -2 * Math.cos(w0) / a0, a2: (1 - alpha) / a0 };
 }
 
 // intensity: same scale as before (roughly 0-12; player hits arrive
@@ -408,56 +447,6 @@ function playCrashSound(intensity, x) {
   source.start(0);
 }
 
-// ==================== COUNTDOWN ====================
-function playCountdownTick() {
-  if (!soundEnabled) return;
-  const now = audioCtx.currentTime;
-  const osc = audioCtx.createOscillator();
-  osc.type = 'square';
-  osc.frequency.value = 660;
-  const filter = audioCtx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = 1800;
-  const gain = audioCtx.createGain();
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.12, now + 0.005);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
-  osc.connect(filter);
-  filter.connect(gain);
-  gain.connect(masterGain);
-  osc.start(now);
-  osc.stop(now + 0.16);
-}
-
-// Two-tone air horn — the classic derby start signal
-function playStartHorn() {
-  if (!soundEnabled) return;
-  const now = audioCtx.currentTime;
-  const dur = 0.9;
-  const filter = audioCtx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = 2400;
-  const gain = audioCtx.createGain();
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.22, now + 0.03);
-  gain.gain.setValueAtTime(0.22, now + dur - 0.15);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-  filter.connect(gain);
-  gain.connect(masterGain);
-  [233, 294, 466].forEach((f, i) => {
-    const osc = audioCtx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(f * 0.97, now);
-    osc.frequency.linearRampToValueAtTime(f, now + 0.06);
-    const g = audioCtx.createGain();
-    g.gain.value = i === 2 ? 0.3 : 0.5;
-    osc.connect(g);
-    g.connect(filter);
-    osc.start(now);
-    osc.stop(now + dur + 0.02);
-  });
-}
-
 // ==================== HELPERS ====================
 function normalizeBuffer(buffer, peakTarget) {
   let peak = 0;
@@ -470,6 +459,21 @@ function normalizeBuffer(buffer, peakTarget) {
   for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
     const data = buffer.getChannelData(ch);
     for (let i = 0; i < data.length; i++) data[i] *= scale;
+  }
+}
+
+// Strip any DC offset (one-pole high-pass at ~20Hz)
+function removeDC(buffer) {
+  const r = 1 - (2 * Math.PI * 20 / buffer.sampleRate);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    let x1 = 0, y1 = 0;
+    for (let i = 0; i < data.length; i++) {
+      const y = data[i] - x1 + r * y1;
+      x1 = data[i];
+      y1 = y;
+      data[i] = y;
+    }
   }
 }
 
