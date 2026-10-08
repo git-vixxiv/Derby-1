@@ -102,33 +102,36 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
   const diagonal = Math.sqrt(halfLen * halfLen + halfWid * halfWid);
   const wallMargin = WALL_THICKNESS + diagonal;
 
+  // Each wall clamps the car, then damages whichever zone of the car
+  // actually struck it (backing in hurts the rear, not the engine).
+  // Argument is the wall's outward-facing normal.
   let hitWall = false;
   if (car.x < wallMargin) {
     car.x = wallMargin;
     car.speed *= 0.1;
     car.vx = Math.abs(car.vx) * 0.3;
-    car.sideDamage += absSpeed * 4;
+    applyWallDamage(car, vec(-1, 0), absSpeed);
     hitWall = true;
   }
   if (car.x > ARENA_WIDTH - wallMargin) {
     car.x = ARENA_WIDTH - wallMargin;
     car.speed *= 0.1;
     car.vx = -Math.abs(car.vx) * 0.3;
-    car.sideDamage += absSpeed * 4;
+    applyWallDamage(car, vec(1, 0), absSpeed);
     hitWall = true;
   }
   if (car.y < wallMargin) {
     car.y = wallMargin;
     car.speed *= 0.1;
     car.vy = Math.abs(car.vy) * 0.3;
-    car.frontDamage += absSpeed * 3;
+    applyWallDamage(car, vec(0, -1), absSpeed);
     hitWall = true;
   }
   if (car.y > ARENA_HEIGHT - wallMargin) {
     car.y = ARENA_HEIGHT - wallMargin;
     car.speed *= 0.1;
     car.vy = -Math.abs(car.vy) * 0.3;
-    car.rearDamage += absSpeed * 2.5;
+    applyWallDamage(car, vec(0, 1), absSpeed);
     hitWall = true;
   }
 
@@ -143,4 +146,28 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
     mudTracks.push({ x: car.x, y: car.y, angle: car.angle, life: 350 });
     car.trackTimer = 10;
   }
+}
+
+// Wall impact: the contact point is the car's deepest point toward the
+// wall. Corners within a few units of that depth are averaged, so a car
+// flush against the wall with its door registers as a side hit and a
+// square nose-in registers as front-center. Zone multipliers and model
+// strengths are the same ones car-to-car hits use.
+const WALL_DAMAGE_PER_SPEED = 3;
+
+function applyWallDamage(car, wallNormal, absSpeed) {
+  const corners = getCarCorners(car);
+  const depths = corners.map(c => vecDot(c, wallNormal));
+  const maxDepth = Math.max(...depths);
+  const touching = corners.filter((c, i) => maxDepth - depths[i] < 4);
+  const contact = vec(
+    touching.reduce((sum, c) => sum + c.x, 0) / touching.length,
+    touching.reduce((sum, c) => sum + c.y, 0) / touching.length
+  );
+
+  const zone = getImpactZone(car, contact);
+  const dmg = absSpeed * WALL_DAMAGE_PER_SPEED * getZoneDamageMultiplier(zone, car.carType);
+  if (zone === 'front') car.frontDamage += dmg;
+  else if (zone === 'rear') car.rearDamage += dmg;
+  else car.sideDamage += dmg;
 }
