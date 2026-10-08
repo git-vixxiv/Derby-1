@@ -1,9 +1,9 @@
 // ==================== CAR GEOMETRY ====================
 function getCarDimensions(car) {
   const type = car.carType;
-  const frontCrush = (car.frontDamage / car.maxFrontDamage) * type.hoodLength * 0.6;
-  const rearCrush = (car.rearDamage / car.maxRearDamage) * type.trunkLength * 0.6;
-  const sideCrush = (car.sideDamage / car.maxSideDamage) * 3;
+  const frontCrush = getFrontDamagePct(car) * type.hoodLength * 0.6;
+  const rearCrush = getRearDamagePct(car) * type.trunkLength * 0.6;
+  const sideCrush = getSideDamagePct(car) * 3;
 
   return {
     length: (type.hoodLength - frontCrush) + type.cabinLength + (type.trunkLength - rearCrush),
@@ -190,50 +190,59 @@ function addDeformation(car, contactPoint, zone, dmg) {
 function avg(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
 
 // ==================== CAR HEALTH / DAMAGE STATE ====================
-function getFrontDamagePct(car) { return car.frontDamage / car.maxFrontDamage; }
-function getRearDamagePct(car) { return car.rearDamage / car.maxRearDamage; }
-function getSideDamagePct(car) { return car.sideDamage / car.maxSideDamage; }
+// Two separate measures (v10):
+//   Condition — frontDamage/maxFrontDamage etc., capped at 100%. Drives the
+//     visuals and how badly the car handles. A couple of big hits can max
+//     out a zone: the car crumples and drives like a wreck.
+//   Life — how close the car is to actually being out. Damage keeps
+//     counting past 100% condition; the car only dies once the combined
+//     wear reaches CAR_LIFE. Cars are resilient: a crippled car keeps
+//     limping around until it is finished off.
+function getFrontDamagePct(car) { return Math.min(1, car.frontDamage / car.maxFrontDamage); }
+function getRearDamagePct(car) { return Math.min(1, car.rearDamage / car.maxRearDamage); }
+function getSideDamagePct(car) { return Math.min(1, car.sideDamage / car.maxSideDamage); }
 function getFrontHealth(car) { return 1 - getFrontDamagePct(car); }
 function getRearHealth(car) { return 1 - getRearDamagePct(car); }
 function getSideHealth(car) { return 1 - getSideDamagePct(car); }
 
-function getCarHealthPct(car) {
-  // Calculate overall health as weighted average of zone damages
-  const frontPct = car.frontDamage / car.maxFrontDamage;
-  const sidePct = car.sideDamage / car.maxSideDamage;
-  const rearPct = car.rearDamage / car.maxRearDamage;
+// Fraction of the car's life used up (1 = out). Each zone's damage counts
+// against its own multiple of the zone pool; mixed damage adds up.
+function getLifeUsed(car) {
+  return car.frontDamage / (car.maxFrontDamage * CAR_LIFE.FRONT)
+       + car.sideDamage / (car.maxSideDamage * CAR_LIFE.SIDE)
+       + car.rearDamage / (car.maxRearDamage * CAR_LIFE.REAR);
+}
 
-  // Front is most critical (engine), then side, then rear
-  const weightedDamage = frontPct * 0.45 + sidePct * 0.35 + rearPct * 0.20;
-  return Math.max(0, 1 - weightedDamage);
+// Health bar above the car: remaining life, not condition
+function getCarHealthPct(car) {
+  return Math.max(0, 1 - getLifeUsed(car));
 }
 
 function isDamagedOut(car) {
-  const rearGone = car.rearDamage >= car.maxRearDamage;
-  const frontGone = car.frontDamage >= car.maxFrontDamage;
-  const totalDmgPct = (getFrontDamagePct(car) + getRearDamagePct(car) + getSideDamagePct(car)) / 3;
-  return rearGone || frontGone || totalDmgPct > 0.85;
+  return getLifeUsed(car) >= 1;
 }
 
+// Where the damage is decides what stops working:
+//   front — steering (tie rods, wheels jammed by the crushed fenders) and
+//           some engine power (radiator, engine mounts)
+//   rear  — drivetrain: top speed and acceleration
+//   side  — fenders rubbing the tires: a bit of everything
 function getSpeedModifier(car) {
-  // Rear damage: dragging bumper, flat tire, drivetrain damage
-  // Affects top speed significantly
   const rearPenalty = getRearDamagePct(car) * 0.55;
+  const frontPenalty = getFrontDamagePct(car) * 0.2;
   const sidePenalty = getSideDamagePct(car) * 0.15;
-  return Math.max(0.2, 1 - rearPenalty - sidePenalty);
+  return Math.max(0.25, 1 - rearPenalty - frontPenalty - sidePenalty);
 }
 
 function getAccelerationModifier(car) {
-  // Rear damage affects acceleration MORE than top speed
-  // (engine/drivetrain strain, wheels rubbing)
-  const rearPenalty = getRearDamagePct(car) * 0.7;
-  const sidePenalty = getSideDamagePct(car) * 0.2;
-  return Math.max(0.15, 1 - rearPenalty - sidePenalty);
+  const rearPenalty = getRearDamagePct(car) * 0.6;
+  const frontPenalty = getFrontDamagePct(car) * 0.3;
+  const sidePenalty = getSideDamagePct(car) * 0.15;
+  return Math.max(0.2, 1 - rearPenalty - frontPenalty - sidePenalty);
 }
 
 function getSteerModifier(car) {
-  // Front damage: bent tie rods, alignment damage, wheel interference
-  const frontPenalty = getFrontDamagePct(car) * 0.65;
+  const frontPenalty = getFrontDamagePct(car) * 0.85;
   const sidePenalty = getSideDamagePct(car) * 0.2;
-  return Math.max(0.15, 1 - frontPenalty - sidePenalty);
+  return Math.max(0.05, 1 - frontPenalty - sidePenalty);
 }

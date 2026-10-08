@@ -379,7 +379,8 @@ function drawCar(car) {
   car.smokeTimer++;
 
   // Fire (reduced)
-  if ((totalDmg > 0.65 || car.disabled) && Math.random() < 0.06) {
+  // Fire only once the car is close to finished, not just badly bent
+  if ((getCarHealthPct(car) < 0.25 || car.disabled) && Math.random() < 0.06) {
     const fireX = car.x + Math.cos(car.angle) * (halfLen * 0.4);
     const fireY = car.y + Math.sin(car.angle) * (halfLen * 0.4);
     particles.push({

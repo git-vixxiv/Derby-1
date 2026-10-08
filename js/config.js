@@ -39,6 +39,17 @@ const PHYSICS = {
 // speed hurts as much as a full-speed hit did before.
 const DAMAGE_SPEED_SCALE = 9 / PHYSICS.MAX_FORWARD_SPEED;
 
+// How much punishment a car takes before it is out, as multiples of each
+// zone's pool (see getLifeUsed in car.js). Zones max out their handling
+// and visual damage at 1×; the car keeps running until the combined wear
+// across zones reaches 1. Measured at 75% ramming speed: about 6 front
+// hits, 10 side hits or 14 rear hits (mixed hits add up).
+const CAR_LIFE = {
+  FRONT: 3.5,
+  SIDE: 4.5,
+  REAR: 4
+};
+
 // Per-model color palettes — each model gets a restricted HSL range that
 // fits its real-world character. Lightness is jittered ±10 at spawn for
 // uniqueness within a palette. h = hue (0-360), s = saturation, l = lightness.
