@@ -33,7 +33,9 @@ Modular build:
 - `js/particles.js` — spawnSparks/Debris/PaintChips/Smoke
 - `js/rendering.js` — drawCar, drawArena, drawPowerUp, drawCountdown, drawHealthBar
 - `js/hud.js` — showOverlay, updateHUD, updateHighScoreDisplay
-- `js/game.js` — initGame, generateStartPositions, startGame, nextLevel, startCountdown
+- `js/garage.js` — player car choice (model/paint/number), persistence, garage preview
+- `js/championship.js` — tournament flow, simulated field damage, round-end overlays
+- `js/game.js` — initGame (Quick Derby field), placeField (any field, keeps damage), generateStartPositions, startGame, nextLevel, startCountdown
 - `js/main.js` — global state, controls, gameLoop, event listeners, bootstrap
 
 All JS uses classic `<script>` tags loaded in dependency order — no build step, no ES modules. Functions and `let`/`const` declarations remain global so inline `onclick="startGame()"` handlers in `index.html` continue to work. Open `index.html` directly in a browser, or use `python -m http.server` to avoid file:// quirks. Deployed and playable.
@@ -53,8 +55,10 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Mobile touch controls + keyboard controls
 - Health bars above active cars
 - Floating damage popup numbers
-- Power-ups: wrench (repair) and boost
-- Multiple rounds with increasing car counts (8 + 2×level, capped at 14)
+- **No power-ups or track pickups.** Joe's rule: nothing may hand out an advantage or disadvantage during an event (removed v10.2).
+- Garage (`js/garage.js`): player picks model, paint (16), number color (8) and number (00–99). Saved in localStorage (`demolitionDerbyCarV1`) and used for every event until changed. First visit routes through the garage.
+- Championship (`js/championship.js`): 12-car heat → last 3 running advance → semi-final (your 3 + 9 from 3 simulated heats, carrying simulated damage) → last 3 advance → final (your 3 + 9 from 3 simulated semis) → last car running wins. No repairs between rounds. Elimination shows placement.
+- Quick Derby: endless rounds with increasing car counts (8 + 2×level, capped at 14)
 - Mud tracks, arena environment
 - Per-model car stats (weight, acceleration, top speed, front/rear strength) — first pass, see roster below
 - High score persistence via localStorage (key: `demolitionDerbyHighScoreV9`)
@@ -125,9 +129,12 @@ If you add a new module, append a `<script src="js/your-module.js"></script>` li
 - ~~Differentiated car stats~~ — first pass shipped in v10, tuning pending
 - Weather effects (rain, mud, reduced visibility)
 - Championship mode (multi-round tournament with persistent damage between rounds)
-- Strategic power-ups beyond repair/boost: engine cooling, reinforced bumpers
-- Custom car selection screen with color picker
-- Online leaderboards (would require a backend — scope before committing)
+- ~~Championship mode~~ — shipped v10.2 (3-round tournament)
+- ~~Car selection screen~~ — shipped v10.2 (garage)
+- Different arenas, including a figure-8 track (Joe, requested)
+- Mild weather (Joe: keep it mild while tuning continues)
+- ~~Power-ups~~ — rejected by Joe: no in-event advantages or track pickups
+- ~~Online leaderboards~~ — not wanted for now
 
 ## How Joe works
 

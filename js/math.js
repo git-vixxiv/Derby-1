@@ -21,6 +21,12 @@ function getUniqueNumber() {
   return num;
 }
 
+// Reserve a specific number (the player's) so no AI car gets it
+function claimNumber(num) {
+  usedNumbers.add(num);
+  return num;
+}
+
 function hsl(c, lAdj = 0) {
   return `hsl(${c.h}, ${c.s}%, ${Math.max(0, Math.min(100, c.l + lAdj))}%)`;
 }

@@ -407,10 +407,13 @@ function drawCar(car) {
   ctx.font = `bold ${Math.floor(W * 0.32)}px Arial`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  // Outline contrasts with the number color so dark numbers still read
+  const numColor = car.numberColor || '#ffffff';
+  const darkNumber = parseInt(numColor.slice(1, 3), 16) + parseInt(numColor.slice(3, 5), 16) + parseInt(numColor.slice(5, 7), 16) < 200;
   ctx.lineWidth = 2.5;
-  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.strokeStyle = darkNumber ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.7)';
   ctx.strokeText(car.carNumber.toString().padStart(2, '0'), numX, 0);
-  ctx.fillStyle = car.disabled ? '#888' : '#fff';
+  ctx.fillStyle = car.disabled ? '#888' : numColor;
   ctx.fillText(car.carNumber.toString().padStart(2, '0'), numX, 0);
 
   // Fold lines in the sheet metal (persistent): dark crease + light edge
@@ -661,34 +664,6 @@ function drawArena() {
   });
 }
 
-function drawPowerUp(pu) {
-  ctx.save();
-  ctx.translate(pu.x, pu.y);
-  const pulse = Math.sin(Date.now() / 150) * 4;
-  ctx.fillStyle = pu.type === 'wrench' ? 'rgba(46,204,113,0.4)' : 'rgba(241,196,15,0.4)';
-  ctx.beginPath();
-  ctx.arc(0, 0, 22 + pulse, 0, Math.PI * 2);
-  ctx.fill();
-
-  if (pu.type === 'wrench') {
-    ctx.fillStyle = '#bdc3c7';
-    ctx.fillRect(-14, -3, 28, 6);
-    ctx.beginPath();
-    ctx.arc(-14, 0, 9, 0, Math.PI * 2);
-    ctx.arc(14, 0, 9, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    ctx.fillStyle = '#f1c40f';
-    ctx.beginPath();
-    ctx.moveTo(0, -14);
-    ctx.lineTo(10, 14);
-    ctx.lineTo(0, 6);
-    ctx.lineTo(-10, 14);
-    ctx.closePath();
-    ctx.fill();
-  }
-  ctx.restore();
-}
 
 function drawCountdown() {
   const cdText = document.getElementById('countdown-text');

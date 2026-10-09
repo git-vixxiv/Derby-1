@@ -13,7 +13,6 @@ let player = null;
 let enemies = [];
 let allCars = [];
 let disabledCars = [];
-let powerUps = [];
 let particles = [];
 let mudTracks = [];
 let damagePopups = []; // Floating damage numbers
@@ -31,6 +30,7 @@ const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 let frameCount = 0;
 
 updateHighScoreDisplay();
+updateMenuCarLine();
 
 // ==================== MAIN LOOP ====================
 function gameLoop() {
@@ -57,6 +57,12 @@ function gameLoop() {
     if (player) drawPlayerHighlight(player);
     drawCountdown();
     updateHUD();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  if (gameState === 'garage') {
+    drawGaragePreview();
     requestAnimationFrame(gameLoop);
     return;
   }
@@ -158,32 +164,6 @@ function gameLoop() {
     muteEngine();
   }
 
-  // Power-ups
-  if (powerUps.length < 3 && Math.random() < 0.003) {
-    powerUps.push({
-      x: WALL_THICKNESS + 65 + Math.random() * (ARENA_WIDTH - WALL_THICKNESS * 2 - 130),
-      y: WALL_THICKNESS + 65 + Math.random() * (ARENA_HEIGHT - WALL_THICKNESS * 2 - 130),
-      type: Math.random() > 0.35 ? 'wrench' : 'boost',
-      lifetime: 650
-    });
-  }
-
-  powerUps = powerUps.filter(pu => {
-    pu.lifetime--;
-    if (!player.disabled && dist(player, pu) < 34) {
-      if (pu.type === 'wrench') {
-        player.frontDamage = Math.max(0, player.frontDamage - player.maxFrontDamage * 0.12);
-        player.sideDamage = Math.max(0, player.sideDamage - player.maxSideDamage * 0.1);
-        player.rearDamage = Math.max(0, player.rearDamage - player.maxRearDamage * 0.08);
-      } else {
-        const dir = Math.sign(player.speed) || 1;
-        player.speed = dir * PHYSICS.MAX_FORWARD_SPEED * player.carType.topSpeed * 1.3;
-      }
-      return false;
-    }
-    return pu.lifetime > 0;
-  });
-
   // Particles
   particles = particles.filter(p => {
     p.x += p.vx;
@@ -213,34 +193,37 @@ function gameLoop() {
   });
 
   // Win/lose
-  const activeEnemies = enemies.filter(e => !e.disabled);
+  if (gameMode === 'championship') {
+    checkChampionshipRound();
+  } else {
+    const activeEnemies = enemies.filter(e => !e.disabled);
 
-  if (player.disabled) {
-    gameState = 'gameover';
-    if (score > highScore) {
-      highScore = score;
-      localStorage.setItem('demolitionDerbyHighScoreV9', highScore);
+    if (player.disabled) {
+      gameState = 'gameover';
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('demolitionDerbyHighScoreV9', highScore);
+      }
+      updateHighScoreDisplay();
+      document.getElementById('hud-panel').classList.remove('active');
+      document.getElementById('touch-controls').classList.remove('active');
+      document.getElementById('keyboard-hint').classList.remove('active');
+      setTimeout(() => showOverlay('gameover'), 800);
     }
-    updateHighScoreDisplay();
-    document.getElementById('hud-panel').classList.remove('active');
-    document.getElementById('touch-controls').classList.remove('active');
-    document.getElementById('keyboard-hint').classList.remove('active');
-    setTimeout(() => showOverlay('gameover'), 800);
-  }
 
-  if (activeEnemies.length === 0 && gameState === 'playing' && !player.disabled) {
-    gameState = 'levelcomplete';
-    muteEngine();
-    document.getElementById('hud-panel').classList.remove('active');
-    document.getElementById('touch-controls').classList.remove('active');
-    document.getElementById('keyboard-hint').classList.remove('active');
-    showOverlay('level');
+    if (activeEnemies.length === 0 && gameState === 'playing' && !player.disabled) {
+      gameState = 'levelcomplete';
+      muteEngine();
+      document.getElementById('hud-panel').classList.remove('active');
+      document.getElementById('touch-controls').classList.remove('active');
+      document.getElementById('keyboard-hint').classList.remove('active');
+      showOverlay('level');
+    }
   }
 
   // Render
   drawArena();
   disabledCars.forEach(drawCar);
-  powerUps.forEach(drawPowerUp);
   allCars.filter(c => !c.disabled).forEach(drawCar);
 
   // Health bars above active cars

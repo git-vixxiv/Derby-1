@@ -12,6 +12,7 @@
       <canvas id="gameCanvas" width="800" height="880"></canvas>
       
       <div id="countdown-overlay" class="hidden">
+        <div id="stage-banner" class="stage-banner"></div>
         <div id="countdown-text">5</div>
         <div class="flag-container">
           <canvas id="flagCanvas" width="120" height="80"></canvas>
@@ -34,8 +35,46 @@
           <kbd>M</kbd> Mute sound<br>
           <em style="color:#666">Steering only works while moving!</em>
         </div>
-        <button class="btn" onclick="startGame()">START DERBY</button>
+        <div id="menu-car-line" class="menu-car-line"></div>
+        <div class="menu-buttons">
+          <button class="btn" onclick="startChampionship()">CHAMPIONSHIP</button>
+          <button class="btn btn-grey" onclick="startGame()">QUICK DERBY</button>
+          <button class="btn btn-grey btn-small" onclick="openGarage()">GARAGE</button>
+        </div>
         <div id="menu-high-score" class="high-score"></div>
+      </div>
+
+      <div id="garage-overlay" class="overlay garage hidden">
+        <div class="garage-panel">
+          <div class="garage-title">GARAGE</div>
+          <div class="garage-row">
+            <button class="arrow-btn" onclick="garageChangeModel(-1)">◀</button>
+            <div class="garage-model-box">
+              <div id="garage-model" class="garage-model"></div>
+              <div id="garage-era" class="garage-era"></div>
+              <div id="garage-trait" class="garage-trait"></div>
+            </div>
+            <button class="arrow-btn" onclick="garageChangeModel(1)">▶</button>
+          </div>
+          <div class="garage-label">Paint: <span id="garage-paint-name"></span></div>
+          <div id="garage-paint" class="swatches"></div>
+          <div class="garage-label">Number color: <span id="garage-numcolor-name"></span></div>
+          <div id="garage-numcolor" class="swatches"></div>
+          <div class="garage-row">
+            <span class="garage-label" style="margin:0">Number</span>
+            <button class="arrow-btn small" onclick="garageChangeNumber(-1)">−</button>
+            <div id="garage-number" class="garage-number">07</div>
+            <button class="arrow-btn small" onclick="garageChangeNumber(1)">+</button>
+          </div>
+          <button class="btn btn-green" onclick="garageDone()">DONE</button>
+        </div>
+      </div>
+
+      <div id="champ-overlay" class="overlay hidden">
+        <div id="champ-stage" class="champ-stage">CHAMPIONSHIP</div>
+        <div id="champ-title" class="level-complete-title"></div>
+        <div id="champ-body" class="champ-body"></div>
+        <div id="champ-buttons" class="menu-buttons"></div>
       </div>
       
       <div id="level-overlay" class="overlay hidden">
@@ -44,6 +83,7 @@
         <div class="score-display" style="font-size:14px;color:#888">Cars Wrecked: <span id="cars-wrecked">0</span></div>
         <div class="score-display" style="font-size:14px;color:#888">Time: <span id="round-time">0:00</span></div>
         <button class="btn btn-green" style="margin-top:20px" onclick="nextLevel()">NEXT ROUND</button>
+        <button class="btn btn-grey btn-small" onclick="backToMenu()">MENU</button>
       </div>
       
       <div id="gameover-overlay" class="overlay hidden">
@@ -53,6 +93,7 @@
         <div id="disqualified-msg" style="color:#f39c12;font-size:14px;margin:5px 0;display:none">Disqualified: No contact for 45 seconds!</div>
         <div class="high-score">Best: <span id="gameover-high-score">0</span></div>
         <button class="btn" style="margin-top:20px" onclick="startGame()">TRY AGAIN</button>
+        <button class="btn btn-grey btn-small" onclick="backToMenu()">MENU</button>
       </div>
     </div>
     
@@ -127,6 +168,8 @@
   <script src="js/particles.js"></script>
   <script src="js/rendering.js"></script>
   <script src="js/hud.js"></script>
+  <script src="js/garage.js"></script>
+  <script src="js/championship.js"></script>
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>
 </body>

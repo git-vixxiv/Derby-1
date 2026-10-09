@@ -44,3 +44,32 @@ html, body { width: 100%; height: 100%; overflow: auto; background: #0d0d0d; fon
 #countdown-text { font-size: 120px; font-weight: bold; color: #fff; text-shadow: 0 0 30px rgba(255,255,255,0.5), 4px 4px 8px #000; }
 #countdown-text.go { color: #2ecc71; font-size: 100px; }
 .flag-container { margin-top: 20px; }
+
+/* Menu */
+.menu-buttons { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.btn-grey { background: linear-gradient(180deg, #555 0%, #333 100%); }
+.btn-small { padding: 10px 30px; font-size: 16px; }
+.menu-car-line { color: #ccc; font-size: 13px; margin-bottom: 6px; min-height: 16px; }
+
+/* Garage: car preview is drawn on the canvas behind the top of the panel */
+.overlay.garage { background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.92) 48%); justify-content: flex-end; padding-bottom: 18px; }
+.garage-panel { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 0 16px; }
+.garage-title { position: absolute; top: 14px; font-size: 26px; font-weight: bold; color: #f5a623; text-shadow: 2px 2px 4px #000; letter-spacing: 2px; }
+.garage-row { display: flex; align-items: center; gap: 12px; }
+.garage-model-box { text-align: center; min-width: 240px; }
+.garage-model { color: #fff; font-size: 24px; font-weight: bold; }
+.garage-era { color: #aaa; font-size: 13px; }
+.garage-trait { color: #f5a623; font-size: 12px; margin-top: 2px; }
+.garage-label { color: #aaa; font-size: 12px; margin-top: 6px; }
+.garage-label span { color: #fff; }
+.garage-number { color: #fff; font-size: 26px; font-weight: bold; min-width: 44px; text-align: center; font-family: monospace; }
+.arrow-btn { background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; width: 44px; height: 44px; font-size: 20px; cursor: pointer; touch-action: manipulation; }
+.arrow-btn.small { width: 36px; height: 36px; }
+.swatches { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 420px; }
+.swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #444; cursor: pointer; touch-action: manipulation; }
+.swatch.selected { border: 3px solid #f5a623; transform: scale(1.12); }
+
+/* Championship */
+.champ-stage { color: #888; font-size: 13px; letter-spacing: 3px; margin-bottom: 6px; }
+.champ-body { color: #ddd; font-size: 15px; text-align: center; line-height: 1.6; margin: 6px 24px 16px; max-width: 560px; }
+.stage-banner { color: #f5a623; font-size: 20px; font-weight: bold; text-shadow: 2px 2px 6px #000; margin-bottom: 10px; letter-spacing: 1px; }

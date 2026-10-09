@@ -1,11 +1,13 @@
 // ==================== HUD / OVERLAYS ====================
 function showOverlay(type) {
-  document.getElementById('menu-overlay').classList.add('hidden');
-  document.getElementById('level-overlay').classList.add('hidden');
-  document.getElementById('gameover-overlay').classList.add('hidden');
+  document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden'));
   document.getElementById('countdown-overlay').classList.add('hidden');
 
-  if (type === 'menu') {
+  if (type === 'garage') {
+    document.getElementById('garage-overlay').classList.remove('hidden');
+  } else if (type === 'champ') {
+    document.getElementById('champ-overlay').classList.remove('hidden');
+  } else if (type === 'menu') {
     document.getElementById('menu-overlay').classList.remove('hidden');
   } else if (type === 'level') {
     document.getElementById('completed-level').textContent = level;
@@ -29,7 +31,7 @@ function updateHighScoreDisplay() {
 }
 
 function updateHUD() {
-  document.getElementById('hud-level').textContent = level;
+  document.getElementById('hud-level').textContent = gameMode === 'championship' ? getStageShortName() : level;
   document.getElementById('hud-enemies').textContent = enemies.filter(e => !e.disabled).length;
   document.getElementById('hud-score').textContent = score;
 

@@ -49,7 +49,8 @@ function getCarAxes(car) {
 
 // ==================== CAR FACTORY ====================
 function createCar(x, y, angle, isPlayer = false, colorIndex = 0, totalCars = 1) {
-  const baseType = CAR_TYPES[Math.floor(Math.random() * CAR_TYPES.length)];
+  // The player drives the car they built in the garage
+  const baseType = isPlayer ? CAR_TYPES[playerCar.model] : CAR_TYPES[Math.floor(Math.random() * CAR_TYPES.length)];
 
   // Scale the car type
   const carType = {
@@ -61,14 +62,14 @@ function createCar(x, y, angle, isPlayer = false, colorIndex = 0, totalCars = 1)
     cabinLength: baseType.cabinLength * CAR_SCALE
   };
 
-  // Player keeps the signature bright blue regardless of model.
+  // Player uses their garage paint.
   // Enemies pick from their model's color palette and jitter lightness
   // for uniqueness within the palette (so two Crown Vics don't look
   // identical). colorIndex is reused as the palette index seed so the
   // distribution feels intentional rather than purely random.
   let color;
   if (isPlayer) {
-    color = { h: 210, s: 70, l: 45 };
+    color = getPlayerPaint();
   } else {
     const palette = baseType.colorPalette;
     const base = palette[colorIndex % palette.length];
@@ -96,7 +97,8 @@ function createCar(x, y, angle, isPlayer = false, colorIndex = 0, totalCars = 1)
 
     isPlayer,
     color,
-    carNumber: getUniqueNumber(),
+    carNumber: isPlayer ? claimNumber(playerCar.number) : getUniqueNumber(),
+    numberColor: isPlayer ? getPlayerNumberColor() : '#ffffff',
     carType,
     disabled: false,
     disabledReason: null,
