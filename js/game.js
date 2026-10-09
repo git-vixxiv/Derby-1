@@ -17,6 +17,8 @@ function initGame(levelNum) {
 // Damage, dents and creases stay with each car.
 function placeField(cars) {
   frameCount = 0;
+  pickArenaForRound();
+  pickWeatherForRound();
   playerDisqualified = false;
 
   const positions = generateStartPositions(cars.length);
@@ -63,42 +65,7 @@ function placeField(cars) {
 }
 
 function generateStartPositions(count) {
-  const positions = [];
-  const margin = WALL_THICKNESS + 55 * CAR_SCALE;
-  const arenaW = ARENA_WIDTH - margin * 2;
-  const arenaH = ARENA_HEIGHT - margin * 2;
-  const perimeter = 2 * (arenaW + arenaH);
-  const spacing = perimeter / count;
-
-  for (let i = 0; i < count; i++) {
-    let d = (i * spacing + spacing / 2) % perimeter;
-    let x, y, angle;
-
-    if (d < arenaW) {
-      x = margin + d;
-      y = margin;
-      angle = -Math.PI / 2; // Facing up (toward wall)
-    } else if (d < arenaW + arenaH) {
-      x = ARENA_WIDTH - margin;
-      y = margin + (d - arenaW);
-      angle = 0; // Facing right
-    } else if (d < 2 * arenaW + arenaH) {
-      x = ARENA_WIDTH - margin - (d - arenaW - arenaH);
-      y = ARENA_HEIGHT - margin;
-      angle = Math.PI / 2; // Facing down
-    } else {
-      x = margin;
-      y = ARENA_HEIGHT - margin - (d - 2 * arenaW - arenaH);
-      angle = Math.PI; // Facing left
-    }
-
-    x += (Math.random() - 0.5) * 20;
-    y += (Math.random() - 0.5) * 20;
-
-    positions.push({ x, y, angle });
-  }
-
-  return positions;
+  return arena.startSlots(count);
 }
 
 // Quick Derby (endless rounds, last car standing each round)

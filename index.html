@@ -36,6 +36,16 @@
           <em style="color:#666">Steering only works while moving!</em>
         </div>
         <div id="menu-car-line" class="menu-car-line"></div>
+        <div class="menu-settings">
+          <div class="setting-row"><span class="setting-label">Arena</span>
+            <button class="arrow-btn small" onclick="cycleArenaChoice(-1)">◀</button>
+            <span id="menu-arena" class="setting-value"></span>
+            <button class="arrow-btn small" onclick="cycleArenaChoice(1)">▶</button></div>
+          <div class="setting-row"><span class="setting-label">Weather</span>
+            <button class="arrow-btn small" onclick="cycleWeatherChoice(-1)">◀</button>
+            <span id="menu-weather" class="setting-value"></span>
+            <button class="arrow-btn small" onclick="cycleWeatherChoice(1)">▶</button></div>
+        </div>
         <div class="menu-buttons">
           <button class="btn" onclick="startChampionship()">CHAMPIONSHIP</button>
           <button class="btn btn-grey" onclick="startGame()">QUICK DERBY</button>
@@ -162,6 +172,8 @@
   <script src="js/math.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/car.js"></script>
+  <script src="js/arena.js"></script>
+  <script src="js/weather.js"></script>
   <script src="js/collision.js"></script>
   <script src="js/physics.js"></script>
   <script src="js/ai.js"></script>

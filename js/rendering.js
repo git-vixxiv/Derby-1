@@ -595,6 +595,10 @@ function drawCar(car) {
 }
 
 function drawArena() {
+  if (arena.style !== 'pit') {
+    drawShapedArena();
+    return;
+  }
   ctx.fillStyle = '#5d4e3a';
   ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
 
@@ -611,24 +615,7 @@ function drawArena() {
     ctx.fill();
   }
 
-  ctx.strokeStyle = 'rgba(55,45,32,0.2)';
-  ctx.lineWidth = 5;
-  mudTracks = mudTracks.filter(t => {
-    t.life--;
-    if (t.life > 0) {
-      ctx.globalAlpha = Math.min(t.life / 100, 1);
-      ctx.save();
-      ctx.translate(t.x, t.y);
-      ctx.rotate(t.angle);
-      ctx.beginPath();
-      ctx.moveTo(-10, -4); ctx.lineTo(10, -4);
-      ctx.moveTo(-10, 4); ctx.lineTo(10, 4);
-      ctx.stroke();
-      ctx.restore();
-    }
-    return t.life > 0;
-  });
-  ctx.globalAlpha = 1;
+  drawMudTracks();
 
   ctx.fillStyle = '#666';
   ctx.fillRect(0, 0, ARENA_WIDTH, WALL_THICKNESS);
@@ -664,6 +651,101 @@ function drawArena() {
   });
 }
 
+function drawMudTracks() {
+  ctx.strokeStyle = 'rgba(55,45,32,0.2)';
+  ctx.lineWidth = 5;
+  mudTracks = mudTracks.filter(t => {
+    t.life--;
+    if (t.life > 0) {
+      ctx.globalAlpha = Math.min(t.life / 100, 1);
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      ctx.rotate(t.angle);
+      ctx.beginPath();
+      ctx.moveTo(-10, -4); ctx.lineTo(10, -4);
+      ctx.moveTo(-10, 4); ctx.lineTo(10, 4);
+      ctx.stroke();
+      ctx.restore();
+    }
+    return t.life > 0;
+  });
+  ctx.globalAlpha = 1;
+
+}
+
+// Oval and figure-8 arenas: dirt inside the outer wall, grass outside,
+// concrete barrier along the wall, tire-ringed grass infield islands
+function drawShapedArena() {
+  ctx.fillStyle = '#25301e';
+  ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+
+  ctx.save();
+  traceArenaOuter();
+  ctx.clip();
+  ctx.fillStyle = '#5d4e3a';
+  ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+  ctx.fillStyle = '#4a3f2e';
+  for (let i = 0; i < 30; i++) {
+    ctx.beginPath();
+    ctx.ellipse((i * 137 + 40) % ARENA_WIDTH, (i * 97 + 50) % ARENA_HEIGHT, 30 + (i % 5) * 18, 20 + (i % 4) * 12, i * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#3d3425';
+  for (let i = 0; i < 10; i++) {
+    ctx.beginPath();
+    ctx.ellipse((i * 211 + 100) % ARENA_WIDTH, (i * 163 + 80) % ARENA_HEIGHT, 45 + (i % 3) * 25, 28 + (i % 4) * 15, i, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  drawMudTracks();
+  ctx.restore();
+
+  // Concrete barrier just outside the wall line (clip to the outside)
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+  const pts = arena.outer;
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = pts.length - 1; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.clip('evenodd');
+  traceArenaOuter();
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#6b6b6b';
+  ctx.lineWidth = 30;
+  ctx.stroke();
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  ctx.setLineDash([2, 38]);
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 30;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // Infield islands and posts
+  for (const o of arena.obstacles) {
+    if (o.island) {
+      ctx.fillStyle = '#35502a';
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#2c4423';
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r * 0.6, 0, Math.PI * 2); ctx.fill();
+      // Ring of stacked tires around the island edge
+      const n = Math.round((Math.PI * 2 * o.r) / 13);
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        const tx = o.x + Math.cos(a) * (o.r - 5), ty = o.y + Math.sin(a) * (o.r - 5);
+        ctx.fillStyle = '#151515';
+        ctx.beginPath(); ctx.arc(tx, ty, 6.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#333';
+        ctx.beginPath(); ctx.arc(tx, ty, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = '#888';
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
 
 function drawCountdown() {
   const cdText = document.getElementById('countdown-text');

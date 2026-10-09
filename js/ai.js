@@ -154,11 +154,22 @@ function updateAI(car) {
       break;
   }
 
-  const wallDist = 85;
-  if (car.x < wallDist) wantRight = true;
-  if (car.x > ARENA_WIDTH - wallDist) wantLeft = true;
-  if (car.y < wallDist) { if (Math.cos(car.angle) < 0) wantLeft = true; else wantRight = true; }
-  if (car.y > ARENA_HEIGHT - wallDist) { if (Math.cos(car.angle) > 0) wantLeft = true; else wantRight = true; }
+  // Wall avoidance for any arena shape: probe ahead in the direction of
+  // travel and steer toward whichever side has more room. (Charging cars
+  // still commit when the target is right there.)
+  const goingBack = wantReverse || (!wantGas && car.speed < -0.3);
+  if (!(ai.state === 'charging' && distToTarget < 120)) {
+    const dir = goingBack ? car.angle + Math.PI : car.angle;
+    const look = 55 + Math.abs(car.speed) * 12;
+    const probe = a => arenaClearance(car.x + Math.cos(dir + a) * look, car.y + Math.sin(dir + a) * look);
+    if (probe(0) < 25) {
+      const leftRoom = probe(-0.6), rightRoom = probe(0.6);
+      // Steering input turns the nose; in reverse the tail swings the other way
+      const turnRight = rightRoom > leftRoom;
+      wantRight = goingBack ? !turnRight : turnRight;
+      wantLeft = !wantRight;
+    }
+  }
 
   return { gas: wantGas, reverse: wantReverse, left: wantLeft, right: wantRight };
 }

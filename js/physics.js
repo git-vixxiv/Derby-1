@@ -105,7 +105,8 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
     const speedFrac = Math.min(1, absSpeed / P.MAX_FORWARD_SPEED);
     const grip = P.MUD_GRIP
       * (1 - P.GRIP_LOSS_AT_TOP_SPEED * speedFrac)
-      * (1 - P.GRIP_LOSS_FROM_DAMAGE * wheelDamage);
+      * (1 - P.GRIP_LOSS_FROM_DAMAGE * wheelDamage)
+      * weather.grip;
     const slip = normAngle(car.angle - car.moveAngle);
     car.moveAngle += slip * grip;
     // Sliding sideways scrubs speed
@@ -126,46 +127,11 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
   car.x += velX;
   car.y += velY;
 
-  // Wall collisions
-  const dim = getCarDimensions(car);
-  const halfLen = dim.length / 2;
-  const halfWid = dim.width / 2;
-  const diagonal = Math.sqrt(halfLen * halfLen + halfWid * halfWid);
-  const wallMargin = WALL_THICKNESS + diagonal;
-
-  // Each wall clamps the car, then damages whichever zone of the car
-  // actually struck it (backing in hurts the rear, not the engine).
-  // Argument is the wall's outward-facing normal.
-  let hitWall = false;
-  let wallImpactSpeed = 0;
-  if (car.x < wallMargin) {
-    car.x = wallMargin;
-    car.speed *= 0.1;
-    car.vx = Math.abs(car.vx) * 0.3;
-    wallImpactSpeed = Math.max(wallImpactSpeed, applyWallDamage(car, vec(-1, 0), velX, velY));
-    hitWall = true;
-  }
-  if (car.x > ARENA_WIDTH - wallMargin) {
-    car.x = ARENA_WIDTH - wallMargin;
-    car.speed *= 0.1;
-    car.vx = -Math.abs(car.vx) * 0.3;
-    wallImpactSpeed = Math.max(wallImpactSpeed, applyWallDamage(car, vec(1, 0), velX, velY));
-    hitWall = true;
-  }
-  if (car.y < wallMargin) {
-    car.y = wallMargin;
-    car.speed *= 0.1;
-    car.vy = Math.abs(car.vy) * 0.3;
-    wallImpactSpeed = Math.max(wallImpactSpeed, applyWallDamage(car, vec(0, -1), velX, velY));
-    hitWall = true;
-  }
-  if (car.y > ARENA_HEIGHT - wallMargin) {
-    car.y = ARENA_HEIGHT - wallMargin;
-    car.speed *= 0.1;
-    car.vy = -Math.abs(car.vy) * 0.3;
-    wallImpactSpeed = Math.max(wallImpactSpeed, applyWallDamage(car, vec(0, 1), velX, velY));
-    hitWall = true;
-  }
+  // Walls and infield obstacles of the current arena. Each contact pushes
+  // the car out, damages whichever zone actually struck (backing in hurts
+  // the rear, not the engine) and stops or bounces the car.
+  const wallImpactSpeed = collideCarWithArena(car, velX, velY);
+  const hitWall = wallImpactSpeed > 0;
 
   // Wall crash sound for player
   if (hitWall && car.isPlayer && wallImpactSpeed > 1) {

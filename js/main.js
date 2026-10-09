@@ -31,6 +31,7 @@ let frameCount = 0;
 
 updateHighScoreDisplay();
 updateMenuCarLine();
+updateMenuSettings();
 
 // ==================== MAIN LOOP ====================
 function gameLoop() {
@@ -54,6 +55,7 @@ function gameLoop() {
     drawArena();
     disabledCars.forEach(drawCar);
     allCars.forEach(drawCar);
+    drawWeather();
     if (player) drawPlayerHighlight(player);
     drawCountdown();
     updateHUD();
@@ -300,6 +302,8 @@ function gameLoop() {
     }
   });
   ctx.globalAlpha = 1;
+
+  drawWeather();
 
   updateHUD();
 

@@ -33,6 +33,8 @@ Modular build:
 - `js/particles.js` — spawnSparks/Debris/PaintChips/Smoke
 - `js/rendering.js` — drawCar, drawArena, drawPowerUp, drawCountdown, drawHealthBar
 - `js/hud.js` — showOverlay, updateHUD, updateHighScoreDisplay
+- `js/arena.js` — arena layouts (outer wall polygon, round obstacles, start slots), `collideCarWithArena`, `arenaClearance` (AI), arena picker
+- `js/weather.js` — mild weather (clear / overcast / light rain −8% grip), rain drawing, menu settings
 - `js/garage.js` — player car choice (model/paint/number), persistence, garage preview
 - `js/championship.js` — tournament flow, simulated field damage, round-end overlays
 - `js/game.js` — initGame (Quick Derby field), placeField (any field, keeps damage), generateStartPositions, startGame, nextLevel, startCountdown
@@ -59,7 +61,8 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Garage (`js/garage.js`): player picks model, paint (16), number color (8) and number (00–99). Saved in localStorage (`demolitionDerbyCarV1`) and used for every event until changed. First visit routes through the garage.
 - Championship (`js/championship.js`): 12-car heat → last 3 running advance → semi-final (your 3 + 9 from 3 simulated heats, carrying simulated damage) → last 3 advance → final (your 3 + 9 from 3 simulated semis) → last car running wins. No repairs between rounds. Elimination shows placement.
 - Quick Derby: endless rounds with increasing car counts (8 + 2×level, capped at 14)
-- Mud tracks, arena environment
+- Arenas (`js/arena.js`): County Fairgrounds (original rectangle), Speedway Oval, Figure 8 (two loops, tire-ringed grass islands, crossover in the middle). Menu picker, or random each round. Walls are generic polygons + round obstacles; AI avoids walls with look-ahead probes. Mud tracks are visual only.
+- Weather (`js/weather.js`): Clear / Overcast / Light rain (−8% grip, same for every car), menu picker or random. Default Clear.
 - Per-model car stats (weight, acceleration, top speed, front/rear strength) — first pass, see roster below
 - High score persistence via localStorage (key: `demolitionDerbyHighScoreV9`)
 
@@ -131,8 +134,8 @@ If you add a new module, append a `<script src="js/your-module.js"></script>` li
 - Championship mode (multi-round tournament with persistent damage between rounds)
 - ~~Championship mode~~ — shipped v10.2 (3-round tournament)
 - ~~Car selection screen~~ — shipped v10.2 (garage)
-- Different arenas, including a figure-8 track (Joe, requested)
-- Mild weather (Joe: keep it mild while tuning continues)
+- ~~Different arenas~~ — shipped v10.3 (Fairgrounds, Oval, Figure 8 as a derby arena). Open question for Joe: should Figure 8 be an actual lap race?
+- ~~Mild weather~~ — shipped v10.3
 - ~~Power-ups~~ — rejected by Joe: no in-event advantages or track pickups
 - ~~Online leaderboards~~ — not wanted for now
 
