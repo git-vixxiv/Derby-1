@@ -1,5 +1,8 @@
 // ==================== PHYSICS ====================
-function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
+// analogSteer (optional): -1..1 from tilt or the touch pad. The wheel still
+// turns toward that position at the same rate as the keys, so analog input
+// gives finer control without making the car any twitchier.
+function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, analogSteer = null) {
   if (car.disabled) return;
 
   const type = car.carType;
@@ -15,7 +18,14 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight) {
   const maxSteer = P.MAX_STEER_ANGLE * steerMod;
 
   // Steering
-  if (inputLeft) {
+  if (analogSteer !== null && !inputLeft && !inputRight) {
+    const target = clamp(analogSteer, -1, 1) * maxSteer;
+    const delta = target - car.steerAngle;
+    // Heading back toward center uses the faster return rate, like the keys
+    const rate = Math.abs(target) < Math.abs(car.steerAngle) && Math.sign(target) !== -Math.sign(car.steerAngle)
+      ? P.STEER_RETURN_SPEED : P.STEER_SPEED * steerMod;
+    car.steerAngle += clamp(delta, -rate, rate);
+  } else if (inputLeft) {
     car.steerAngle -= P.STEER_SPEED * steerMod;
   } else if (inputRight) {
     car.steerAngle += P.STEER_SPEED * steerMod;

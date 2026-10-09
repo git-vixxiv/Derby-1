@@ -41,6 +41,10 @@
             <button class="arrow-btn small" onclick="cycleArenaChoice(-1)">◀</button>
             <span id="menu-arena" class="setting-value"></span>
             <button class="arrow-btn small" onclick="cycleArenaChoice(1)">▶</button></div>
+          <div class="setting-row" id="menu-steering-row" style="display:none"><span class="setting-label">Steering</span>
+            <button class="arrow-btn small" onclick="cycleSteeringMode()">◀</button>
+            <span id="menu-steering" class="setting-value"></span>
+            <button class="arrow-btn small" onclick="cycleSteeringMode()">▶</button></div>
           <div class="setting-row"><span class="setting-label">Weather</span>
             <button class="arrow-btn small" onclick="cycleWeatherChoice(-1)">◀</button>
             <span id="menu-weather" class="setting-value"></span>
@@ -157,14 +161,10 @@
     </div>
     
     <div id="touch-controls">
-      <div class="control-group">
-        <button class="control-btn steer-btn" id="btn-left">◀</button>
-        <button class="control-btn steer-btn" id="btn-right">▶</button>
-      </div>
-      <div class="control-group">
-        <button class="control-btn reverse-btn" id="btn-reverse">R</button>
-        <button class="control-btn gas-btn" id="btn-gas">GAS</button>
-      </div>
+      <div id="steer-pad" class="steer-pad"><div id="steer-knob" class="steer-knob"></div><span>DRAG TO STEER</span></div>
+      <div id="tilt-indicator" class="tilt-indicator"><div id="tilt-needle" class="tilt-needle"></div><span>TILT TO STEER</span></div>
+      <button class="control-btn reverse-btn pedal" id="btn-reverse">REV</button>
+      <button class="control-btn gas-btn pedal" id="btn-gas">GAS</button>
     </div>
   </div>
 
@@ -183,6 +183,7 @@
   <script src="js/garage.js"></script>
   <script src="js/championship.js"></script>
   <script src="js/game.js"></script>
+  <script src="js/mobile.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

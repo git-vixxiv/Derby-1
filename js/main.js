@@ -18,7 +18,7 @@ let mudTracks = [];
 let damagePopups = []; // Floating damage numbers
 let usedNumbers = new Set();
 
-const controls = { left: false, right: false, gas: false, reverse: false };
+const controls = { left: false, right: false, gas: false, reverse: false, analogSteer: null };
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -32,6 +32,7 @@ let frameCount = 0;
 updateHighScoreDisplay();
 updateMenuCarLine();
 updateMenuSettings();
+setupMobile();
 
 // ==================== MAIN LOOP ====================
 function gameLoop() {
@@ -48,6 +49,7 @@ function gameLoop() {
       }
     }
 
+    updateMobileSteering(); // calibrates tilt neutral during the countdown
     // Engines idle at the line; holding gas or reverse revs in place
     updateEngineSound(0, controls.gas || controls.reverse);
     updateFieldSound(enemies);
@@ -78,7 +80,8 @@ function gameLoop() {
 
   // Update player
   if (!player.disabled) {
-    updateCarPhysics(player, controls.gas, controls.reverse, controls.left, controls.right);
+    updateMobileSteering();
+    updateCarPhysics(player, controls.gas, controls.reverse, controls.left, controls.right, controls.analogSteer);
 
     // Update engine sound based on player state
     updateEngineSound(player.speed, controls.gas || controls.reverse);

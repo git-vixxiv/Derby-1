@@ -171,8 +171,11 @@ function drawGaragePreview() {
     c.lastHitFlash = -1000;
     garagePreviewCar = c;
   }
+  // Landscape phone: the settings panel covers the right half, so show the
+  // car on the left
+  const sideBySide = document.body.classList.contains('touch') && innerWidth > innerHeight;
   ctx.save();
-  ctx.translate(ARENA_WIDTH / 2, 215);
+  ctx.translate(sideBySide ? ARENA_WIDTH * 0.27 : ARENA_WIDTH / 2, sideBySide ? ARENA_HEIGHT / 2 : 215);
   ctx.scale(3, 3);
   drawCar(garagePreviewCar);
   ctx.restore();

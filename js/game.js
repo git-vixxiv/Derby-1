@@ -70,6 +70,7 @@ function generateStartPositions(count) {
 
 // Quick Derby (endless rounds, last car standing each round)
 function startGame() {
+  prepareMobileForRace();
   withPlayerCar(() => {
     initAudio(); // Initialize sound on first user interaction
     gameMode = 'quick';

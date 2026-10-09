@@ -19,6 +19,7 @@ const CHAMP_STAGES = [
 ];
 
 function startChampionship() {
+  prepareMobileForRace();
   withPlayerCar(() => {
     initAudio();
     gameMode = 'championship';

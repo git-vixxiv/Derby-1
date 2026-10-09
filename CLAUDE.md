@@ -38,6 +38,7 @@ Modular build:
 - `js/garage.js` — player car choice (model/paint/number), persistence, garage preview
 - `js/championship.js` — tournament flow, simulated field damage, round-end overlays
 - `js/game.js` — initGame (Quick Derby field), placeField (any field, keeps damage), generateStartPositions, startGame, nextLevel, startCountdown
+- `js/mobile.js` — tilt + touch-pad steering, permission, steering setting, fullscreen
 - `js/main.js` — global state, controls, gameLoop, event listeners, bootstrap
 
 All JS uses classic `<script>` tags loaded in dependency order — no build step, no ES modules. Functions and `let`/`const` declarations remain global so inline `onclick="startGame()"` handlers in `index.html` continue to work. Open `index.html` directly in a browser, or use `python -m http.server` to avoid file:// quirks. Deployed and playable.
@@ -54,7 +55,7 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - AI opponents with state machine: scanning, approaching, positioning, charging, retreating, unsticking
 - 45-second contact timer — must hit someone every 45s or you're disqualified
 - Cars start around arena perimeter facing outward (authentic derby start)
-- Mobile touch controls + keyboard controls
+- Keyboard controls (desktop). Phones (`js/mobile.js`): **tilt steering** (hold the phone like a wheel; gravity direction in the screen plane vs. a neutral captured during the countdown; 30° = full lock, 2° deadzone; orientation-independent and iPhone/Android sign-agnostic; iPhone needs a tap + permission prompt, requested from the Start buttons or the Steering menu setting) or a **drag-to-steer touch pad** (70 px = full lock). Both are analog: `updateCarPhysics(..., analogSteer)` moves the wheel toward the target at the normal steer rate. Landscape layout: arena full height center, REV left / GAS right (tilt) or pad left / REV+GAS right (touch). Portrait: steering area + REV + GAS under the arena. Menus go fullscreen and scroll on phones. Android goes fullscreen on Start.
 - Health bars above active cars
 - Floating damage popup numbers
 - **No power-ups or track pickups.** Joe's rule: nothing may hand out an advantage or disadvantage during an event (removed v10.2).
