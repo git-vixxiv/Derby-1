@@ -41,11 +41,13 @@ function updateHUD() {
     const framesSinceContact = frameCount - player.lastContactFrame;
     const secondsRemaining = Math.ceil((CONTACT_TIMEOUT - framesSinceContact) / 60);
 
-    if (secondsRemaining <= 15 && secondsRemaining > 0 && !player.disabled) {
-      document.getElementById('contact-timer').textContent = `HIT someone in ${secondsRemaining}s!`;
-      document.getElementById('contact-timer').style.color = secondsRemaining <= 5 ? '#e74c3c' : '#f39c12';
+    // The hit clock: time left to initiate contact with a live car
+    const clock = document.getElementById('contact-timer');
+    if (secondsRemaining > 0 && !player.disabled) {
+      clock.textContent = `HIT someone in ${secondsRemaining}s`;
+      clock.style.color = secondsRemaining <= 5 ? '#e74c3c' : secondsRemaining <= 15 ? '#f39c12' : '#888';
     } else {
-      document.getElementById('contact-timer').textContent = '';
+      clock.textContent = '';
     }
   }
 

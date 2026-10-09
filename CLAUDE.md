@@ -53,7 +53,7 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Particle systems: sparks, debris, paint chips, smoke, fire
 - Synthesized audio (no files): 12 pre-rendered crash buffers (3 weight classes × 4 variations) built from noise only — body thud, broadband crunch, crunch driven through a resonant filter bank for the steel-panel clang, debris ticks, hard saturation. Stereo-panned, volume scales with impact. Metal scrape loop for sustained contact. V8 engine loop of unpitched exhaust pops (pitch comes from firing rate only), rev at the line during countdown, muffled field-engine bed. Master compressor. `M` to mute (localStorage key `demolitionDerbyMuted`). **Avoid short tonal components** (damped sines, pitch sweeps): Joe heard them as water splashes and a horn.
 - AI opponents with state machine: scanning, approaching, positioning, charging, retreating, unsticking
-- 45-second contact timer — must hit someone every 45s or you're disqualified
+- **30-second hit rule** (Joe, v10.5): every car must *initiate* contact with a live car within 30 s or it's out. Only the car driving into the other (approach speed > `CONTACT_INITIATE_SPEED` 0.6) gets credit; taking a hit doesn't reset the clock, and hitting a dead car doesn't count. Head-ons credit both. HUD shows the player's hit clock at all times (gray → orange ≤15 s → red ≤5 s). AI goes on the attack at 40% of the clock (12 s).
 - Cars start around arena perimeter facing outward (authentic derby start)
 - Keyboard controls (desktop). Phones (`js/mobile.js`): **tilt steering** (hold the phone like a wheel; gravity direction in the screen plane vs. a neutral captured during the countdown; 30° = full lock, 2° deadzone; orientation-independent and iPhone/Android sign-agnostic; iPhone needs a tap + permission prompt, requested from the Start buttons or the Steering menu setting) or a **drag-to-steer touch pad** (70 px = full lock). Both are analog: `updateCarPhysics(..., analogSteer)` moves the wheel toward the target at the normal steer rate. Landscape layout: arena full height center, REV left / GAS right (tilt) or pad left / REV+GAS right (touch). Portrait: steering area + REV + GAS under the arena. Menus go fullscreen and scroll on phones. Android goes fullscreen on Start.
 - Health bars above active cars
@@ -92,7 +92,7 @@ DAMAGE_WOBBLE_MAX: 0.08
 RESTITUTION: 0.35
 COLLISION_BIAS: 0.3
 ANGULAR_IMPULSE_SCALE: 0.012
-CONTACT_TIMEOUT: 45 * 60        // 45 seconds at 60fps
+CONTACT_TIMEOUT: 30 * 60        // 30 s to initiate a hit (v10.5; was 45 s, any contact)
 CAR_SCALE: 1.2
 ```
 

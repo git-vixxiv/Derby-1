@@ -56,7 +56,7 @@ function checkChampionshipRound() {
     endRoundUI('champover');
     const place = running.length + 1;
     const stage = CHAMP_STAGES[champStage].name;
-    const why = playerDisqualified ? 'Disqualified for no contact in 45 seconds.' : 'Your car is finished.';
+    const why = playerDisqualified ? 'Disqualified: you didn\'t hit anyone for 30 seconds.' : 'Your car is finished.';
     setTimeout(() => showChampOverlay(
       'ELIMINATED',
       '#e74c3c',

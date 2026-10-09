@@ -3,7 +3,10 @@ const ARENA_WIDTH = 800;
 const ARENA_HEIGHT = 880;
 const WALL_THICKNESS = 50;
 const CAR_SCALE = 1.2; // 20% larger cars
-const CONTACT_TIMEOUT = 45 * 60; // 45 seconds at 60fps
+// Derby rule: every car must INITIATE contact with a live car within this
+// time or it's out. Taking a hit doesn't reset it (see resolveCollision).
+const CONTACT_TIMEOUT = 30 * 60; // 30 seconds at 60fps (was 45 and any contact counted)
+const CONTACT_INITIATE_SPEED = 0.6; // must be driving into the other car at least this fast (top speed 6)
 
 const PHYSICS = {
   BASE_ACCELERATION: 0.08,

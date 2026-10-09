@@ -24,7 +24,7 @@
         <div class="subtitle">
           Smash enemy cars until they're out!<br>
           Ram with your REAR to protect your engine.<br>
-          You must HIT someone every 45 seconds or you're out!
+          You must HIT someone every 30 seconds or you're out.<br>Getting hit doesn't count: you have to make the hit.
         </div>
         <div class="controls-hint">
           <strong>Keyboard:</strong><br>
@@ -104,7 +104,7 @@
         <div class="game-over-title">TOTALED!</div>
         <div class="score-display">Round: <span id="final-level">1</span></div>
         <div class="score-display">Final Score: <span id="final-score">0</span></div>
-        <div id="disqualified-msg" style="color:#f39c12;font-size:14px;margin:5px 0;display:none">Disqualified: No contact for 45 seconds!</div>
+        <div id="disqualified-msg" style="color:#f39c12;font-size:14px;margin:5px 0;display:none">Disqualified: didn't hit anyone for 30 seconds!</div>
         <div class="high-score">Best: <span id="gameover-high-score">0</span></div>
         <button class="btn" style="margin-top:20px" onclick="startGame()">TRY AGAIN</button>
         <button class="btn btn-grey btn-small" onclick="backToMenu()">MENU</button>
@@ -157,7 +157,7 @@
       <kbd>A</kbd>/<kbd>←</kbd> Left &nbsp;
       <kbd>D</kbd>/<kbd>→</kbd> Right &nbsp;
       <kbd>M</kbd> Mute
-      &nbsp; | &nbsp; <em>Must HIT every 45s!</em>
+      &nbsp; | &nbsp; <em>Must HIT someone every 30s!</em>
     </div>
     
     <div id="touch-controls">

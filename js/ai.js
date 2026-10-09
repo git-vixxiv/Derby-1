@@ -18,7 +18,8 @@ function updateAI(car) {
   }
 
   const framesSinceContact = frameCount - car.lastContactFrame;
-  const urgency = framesSinceContact > CONTACT_TIMEOUT * 0.65;
+  // Go hunting with 60% of the hit clock left, so there is time to land one
+  const urgency = framesSinceContact > CONTACT_TIMEOUT * 0.4;
 
   const activeCars = allCars.filter(c => c !== car && !c.disabled);
   if (!ai.target || ai.target.disabled || ai.stateTimer <= 0) {

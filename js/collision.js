@@ -111,14 +111,18 @@ function getImpactZone(car, contactPoint) {
 function resolveCollision(car1, car2, collision) {
   const P = PHYSICS;
 
-  // CONTACT CREDIT: Any collision counts as contact for BOTH cars
-  // This must happen BEFORE any early returns
-  car1.lastContactFrame = frameCount;
-  car2.lastContactFrame = frameCount;
-
   // Get velocities at contact point
   const vel1 = getVelocityAtPoint(car1, collision.contactPoint);
   const vel2 = getVelocityAtPoint(car2, collision.contactPoint);
+
+  // CONTACT CREDIT (derby rule): only the car that drives INTO a live car
+  // resets its contact clock. Taking a hit doesn't count, and neither does
+  // bumping a car that's already out. Both get credit on a head-on.
+  // Runs before the early return below so a sustained shove keeps counting.
+  const approach1 = vecDot(vel1, collision.normal);  // car1 moving toward car2
+  const approach2 = -vecDot(vel2, collision.normal); // car2 moving toward car1
+  if (approach1 > CONTACT_INITIATE_SPEED && !car2.disabled) car1.lastContactFrame = frameCount;
+  if (approach2 > CONTACT_INITIATE_SPEED && !car1.disabled) car2.lastContactFrame = frameCount;
   // Normal points from car1 to car2, so relative velocity is taken as
   // car2 relative to car1: negative along the normal = closing in.
   // (Before v10 this was vel1 - vel2, which flipped the test below: head-on
