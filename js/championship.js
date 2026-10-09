@@ -1,20 +1,20 @@
 // ==================== CHAMPIONSHIP ====================
 // Three-round tournament. Every round is a 12-car field.
-//   Heat:       you + 11 fresh cars. When 3 cars are left running, they advance.
-//   Semi-final: your heat's 3 survivors, carrying their damage, + 9 cars
-//               from 3 simulated heats (3 each), carrying simulated damage.
-//   Final:      your semi's 3 survivors + 9 from 3 simulated semi-finals,
+//   Heat:       you + 11 fresh cars. When 6 cars are left running, they advance.
+//   Semi-final: your heat's 6 survivors, carrying their damage, + 6 cars
+//               from a simulated heat, carrying simulated damage.
+//   Final:      your semi's 6 survivors + 6 from a simulated semi-final,
 //               carrying two rounds of damage. Last car running wins.
 // No repairs between rounds: every car starts in the state it finished.
 let gameMode = 'quick'; // 'quick' | 'championship'
 let champStage = 0;     // 0 heat, 1 semi-final, 2 final
 
 const CHAMP_FIELD_SIZE = 12;
-const CHAMP_ADVANCE = 3;     // top 25% of the field
-const CHAMP_OTHER_GROUPS = 3; // simulated heats/semis feeding each round
+const CHAMP_ADVANCE = 6;      // top 50% of the field (Joe, v10.4; was 25%)
+const CHAMP_OTHER_GROUPS = 1; // simulated heats/semis feeding each round, so every round is 12 cars
 const CHAMP_STAGES = [
-  { name: 'HEAT', short: 'HEAT', banner: 'HEAT — last 3 running advance' },
-  { name: 'SEMI-FINAL', short: 'SEMI', banner: 'SEMI-FINAL — last 3 running advance' },
+  { name: 'HEAT', short: 'HEAT', banner: `HEAT — last ${CHAMP_ADVANCE} running advance` },
+  { name: 'SEMI-FINAL', short: 'SEMI', banner: `SEMI-FINAL — last ${CHAMP_ADVANCE} running advance` },
   { name: 'FINAL', short: 'FINAL', banner: 'FINAL — last car running wins' }
 ];
 
@@ -73,7 +73,7 @@ function checkChampionshipRound() {
       'YOU ADVANCE!',
       '#2ecc71',
       `${CHAMP_STAGES[champStage].name} complete: ${running.length} of ${CHAMP_FIELD_SIZE} still running.<br>` +
-      `On to the ${next.toLowerCase()} against ${CHAMP_OTHER_GROUPS * CHAMP_ADVANCE} cars from ${CHAMP_OTHER_GROUPS} other ${champStage === 0 ? 'heats' : 'semi-finals'}.<br>` +
+      `On to the ${next.toLowerCase()} against ${CHAMP_OTHER_GROUPS * CHAMP_ADVANCE} cars from ${CHAMP_OTHER_GROUPS === 1 ? 'another' : CHAMP_OTHER_GROUPS + ' other'} ${champStage === 0 ? 'heat' : 'semi-final'}${CHAMP_OTHER_GROUPS === 1 ? '' : 's'}.<br>` +
       `<span style="color:#f39c12">No repairs: your car starts the ${next.toLowerCase()} exactly as it is.</span>`,
       [[`START ${next}`, 'nextChampionshipRound()', 'btn-green']]
     );
@@ -85,7 +85,7 @@ function checkChampionshipRound() {
     showChampOverlay(
       'CHAMPION!',
       '#f5a623',
-      `Last car running out of ${CHAMP_FIELD_SIZE * 4 * 4} entries.<br>Score: ${score}`,
+      `Last car running out of ${CHAMP_FIELD_SIZE * (CHAMP_OTHER_GROUPS + 1) ** 2} entries.<br>Score: ${score}`,
       [['NEW CHAMPIONSHIP', 'startChampionship()', 'btn-green'], ['MENU', 'backToMenu()', 'btn-grey']]
     );
   }

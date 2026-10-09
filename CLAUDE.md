@@ -60,7 +60,7 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Floating damage popup numbers
 - **No power-ups or track pickups.** Joe's rule: nothing may hand out an advantage or disadvantage during an event (removed v10.2).
 - Garage (`js/garage.js`): player picks model, paint (16), number color (8) and number (00–99). Saved in localStorage (`demolitionDerbyCarV1`) and used for every event until changed. First visit routes through the garage.
-- Championship (`js/championship.js`): 12-car heat → last 3 running advance → semi-final (your 3 + 9 from 3 simulated heats, carrying simulated damage) → last 3 advance → final (your 3 + 9 from 3 simulated semis) → last car running wins. No repairs between rounds. Elimination shows placement.
+- Championship (`js/championship.js`): 12-car heat → last 6 running advance (50%, Joe v10.4) → semi-final (your 6 + 6 from a simulated heat, carrying simulated damage) → last 6 advance → final (your 6 + 6 from a simulated semi) → last car running wins. No repairs between rounds. Elimination shows placement.
 - Quick Derby: endless rounds with increasing car counts (8 + 2×level, capped at 14)
 - Arenas (`js/arena.js`): County Fairgrounds (original rectangle), Speedway Oval, Figure 8 (two loops, tire-ringed grass islands, crossover in the middle). Menu picker, or random each round. Walls are generic polygons + round obstacles; AI avoids walls with look-ahead probes. Mud tracks are visual only.
 - Weather (`js/weather.js`): Clear / Overcast / Light rain (−8% grip, same for every car), menu picker or random. Default Clear.
