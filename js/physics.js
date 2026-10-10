@@ -38,30 +38,36 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, an
   }
   car.steerAngle = clamp(car.steerAngle, -maxSteer, maxSteer);
 
-  // Acceleration - same power forward and reverse
-  if (inputGas) {
-    if (car.speed < 0) {
-      // Braking from reverse
-      car.speed += accel * 2.5;
-    } else {
-      car.speed += accel;
-      if (car.speed > maxForward) car.speed = maxForward;
-    }
-  }
-  if (inputReverse) {
-    if (car.speed > 0) {
-      // Braking from forward
-      car.speed -= accel * 2.5;
-    } else {
-      // Full reverse power (same as forward)
-      car.speed -= accel;
-      if (car.speed < -maxReverse) car.speed = -maxReverse;
-    }
-  }
+  // Throttle, brake, coast. Same power forward and reverse.
+  //   Driving in the direction you're already going (or from rest): drive
+  //     force, reduced while the wheels spin.
+  //   Pedal opposite to the direction of travel: brakes. In mud the wheels
+  //     lock and the car slides (see `braking` below), so it takes a while.
+  //   No pedal: mud and rolling drag.
+  const wantDir = inputGas ? 1 : inputReverse ? -1 : 0;
+  const moving = Math.abs(car.speed) > 0.05 ? Math.sign(car.speed) : 0;
+  car.braking = wantDir !== 0 && moving !== 0 && wantDir !== moving;
 
-  if (!inputGas && !inputReverse) {
-    car.speed *= P.ROLLING_FRICTION * P.MUD_DRAG;
-    if (Math.abs(car.speed) < 0.01) car.speed = 0;
+  if (car.braking) {
+    const prev = car.speed;
+    car.speed -= moving * P.BRAKE_DECEL;
+    if (Math.sign(car.speed) !== Math.sign(prev)) car.speed = 0; // stop, don't flip
+    car.driveDir = 0;
+  } else if (wantDir !== 0) {
+    // New launch (from rest or a change of direction): tires spin first
+    if (car.driveDir !== wantDir && Math.abs(car.speed) < 1) {
+      car.wheelspin = Math.max(car.wheelspin || 0, P.WHEELSPIN_LAUNCH);
+    }
+    car.driveDir = wantDir;
+    car.speed += wantDir * accel * (1 - (car.wheelspin || 0));
+    car.wheelspin = Math.max(0, (car.wheelspin || 0) - P.WHEELSPIN_RECOVERY * weather.grip); // slower to bite in the rain
+    if (car.speed > maxForward) car.speed = maxForward;
+    if (car.speed < -maxReverse) car.speed = -maxReverse;
+  } else {
+    car.driveDir = 0;
+    car.wheelspin = 0;
+    const s = Math.abs(car.speed) * P.COAST_DRAG - P.COAST_DECEL;
+    car.speed = s > 0 ? Math.sign(car.speed) * s : 0;
   }
 
   // Front-axle steering
@@ -78,7 +84,9 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, an
   if (absSpeed > P.MIN_SPEED_TO_TURN && Math.abs(car.effSteer) > 0.01) {
     const turnRadius = wheelBase / Math.tan(Math.abs(car.effSteer));
     const turnDir = Math.sign(car.effSteer);
-    car.angularVel += (car.speed / turnRadius) * turnDir * 0.15;
+    // Locked wheels barely steer while the car slides under braking
+    const steerAuthority = car.braking ? P.LOCKED_STEER : 1;
+    car.angularVel += (car.speed / turnRadius) * turnDir * 0.15 * steerAuthority;
 
     // Turning costs speed (friction from tires scrubbing)
     const turnSpeedLoss = Math.abs(car.effSteer) * absSpeed * 0.012;
@@ -116,7 +124,8 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, an
     const grip = P.MUD_GRIP
       * (1 - P.GRIP_LOSS_AT_TOP_SPEED * speedFrac)
       * (1 - P.GRIP_LOSS_FROM_DAMAGE * wheelDamage)
-      * weather.grip;
+      * weather.grip
+      * (car.braking ? P.LOCKED_GRIP : 1);
     const slip = normAngle(car.angle - car.moveAngle);
     car.moveAngle += slip * grip;
     // Sliding sideways scrubs speed
@@ -148,11 +157,16 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, an
     playCrashSound(wallImpactSpeed * 0.8, car.x);
   }
 
-  // Mud tracks
+  // Mud tracks (laid down thicker while sliding on locked wheels)
   car.trackTimer--;
   if (car.trackTimer <= 0 && absSpeed > 0.4) {
-    mudTracks.push({ x: car.x, y: car.y, angle: car.angle, life: 350 });
-    car.trackTimer = 10;
+    mudTracks.push({ x: car.x, y: car.y, angle: car.angle, life: car.braking ? 500 : 350 });
+    car.trackTimer = car.braking ? 4 : 10;
+  }
+
+  // Spinning tires throw mud out behind the drive direction
+  if ((car.wheelspin || 0) > 0.15 && car.driveDir && frameCount % 2 === 0) {
+    spawnMudSpray(car, car.driveDir, car.wheelspin);
   }
 }
 

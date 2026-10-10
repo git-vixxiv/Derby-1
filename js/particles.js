@@ -61,3 +61,26 @@ function spawnSmoke(x, y, size) {
     type: 'smoke'
   });
 }
+
+// Mud thrown off spinning rear tires, flung opposite to the drive direction
+function spawnMudSpray(car, driveDir, amount) {
+  const dim = getCarDimensions(car);
+  const back = -driveDir;
+  const cos = Math.cos(car.angle), sin = Math.sin(car.angle);
+  const wheelX = (-dim.length / 2 + dim.length * 0.22); // rear axle, car-local
+  for (const side of [-1, 1]) {
+    const lx = wheelX + back * 6, ly = side * dim.width / 2;
+    const px = car.x + cos * lx - sin * ly, py = car.y + sin * lx + cos * ly;
+    const spread = (Math.random() - 0.5) * 0.9;
+    const v = (2 + Math.random() * 3) * amount;
+    const dirA = car.angle + (back > 0 ? 0 : Math.PI) + spread;
+    particles.push({
+      x: px, y: py,
+      vx: Math.cos(dirA) * v, vy: Math.sin(dirA) * v,
+      life: 14 + Math.random() * 10,
+      color: Math.random() < 0.5 ? '#3f3222' : '#5a4a35',
+      size: 1.5 + Math.random() * 2.5,
+      type: 'paint'
+    });
+  }
+}

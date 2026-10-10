@@ -9,11 +9,23 @@ const CONTACT_TIMEOUT = 30 * 60; // 30 seconds at 60fps (was 45 and any contact 
 const CONTACT_INITIATE_SPEED = 0.6; // must be driving into the other car at least this fast (top speed 6)
 
 const PHYSICS = {
-  BASE_ACCELERATION: 0.08,
+  BASE_ACCELERATION: 0.05,  // v10.6: was 0.08 (Joe: accelerating too fast)
   MAX_FORWARD_SPEED: 6,  // v10: cut from 9 (Joe: "way too fast")
   MAX_REVERSE_SPEED: 6,  // Same as forward when healthy
-  ROLLING_FRICTION: 0.975,
-  MUD_DRAG: 0.965,
+  // Off the throttle in mud (v10.6): v = v * COAST_DRAG - COAST_DECEL.
+  // Was a flat 5.9%/frame loss, which stopped a coasting car faster than
+  // braking did.
+  COAST_DRAG: 0.99,
+  COAST_DECEL: 0.025,
+  // Braking in mud (v10.6): wheels lock and the car slides. Was 2.5x the
+  // acceleration (0.2/frame), a near-instant stop.
+  BRAKE_DECEL: 0.09,
+  LOCKED_STEER: 0.35,   // steering authority with the wheels locked
+  LOCKED_GRIP: 0.4,     // travel direction follows the nose this much less while sliding
+  // Wheelspin (v10.6): pulling away from rest or changing direction starts
+  // with the tires spinning in the mud; traction builds as they bite.
+  WHEELSPIN_LAUNCH: 0.7,     // fraction of drive lost at the moment of launch
+  WHEELSPIN_RECOVERY: 0.016, // per frame (~0.75 s to full traction)
   MAX_STEER_ANGLE: 0.42,
   STEER_SPEED: 0.04,     // v10: was 0.055 — wheel turns in slower, less twitchy
   STEER_RETURN_SPEED: 0.08,

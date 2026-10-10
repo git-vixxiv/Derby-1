@@ -47,6 +47,7 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Front-axle steering physics with realistic pivot behavior
 - Oriented Bounding Box (OBB / SAT) collision detection
 - Momentum-based collision response with angular impulse. Impulse goes into drive speed along the direction of travel (a rammer is stopped by the hit) and the rest into knockback. v10 fixed an inverted approach test that made head-on rams deal no damage.
+- Braking and launching in mud (v10.6, Joe): pedal opposite to travel = brakes; the wheels lock, the car slides with little steering (half-second full-lock turn: 12° braking vs 49° on the gas). Launching from rest or changing direction starts with wheelspin (mud spray) and builds traction. Full forward → full reverse: 3.2 s (was 1.6 s).
 - Mud traction: direction of travel (`moveAngle`) lags heading, so cars slide through turns; less grip at speed and with damage. Front damage pulls steering toward the hit side and adds wheel wobble.
 - Per-zone damage (front/side/rear) with separate HP pools. Two measures: **condition** (zone damage ÷ pool, capped at 100%) drives visuals and handling — front kills steering (to 5–15%) and some power, rear kills speed/acceleration, side a bit of both. **Life** (`getLifeUsed`) keeps counting past 100%: out when front/(pool×3.5) + side/(pool×4.5) + rear/(pool×4) ≥ 1 (`CAR_LIFE` in config). At 75% ram speed: 6 front, 10 side or 14 rear hits. Health bar above cars shows life; HUD zone bars show condition. Fire only when life < 25%.
 - Visual damage accumulation — per-car deformation profile (`car.deform`): body outline caves in where hit, persistent creases, buckled hood, broken lamps, bent bumpers, grime; plus scratches/dents in car-local space
@@ -72,11 +73,16 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 These were tuned iteratively with Joe providing direct feedback. v9/v10 are significantly faster and grippier than earlier versions; do not revert toward older values without explicit approval. Any change to these requires testing and approval.
 
 ```javascript
-BASE_ACCELERATION: 0.08         // doubled from 0.04: top speed in ~63% of arena width
+BASE_ACCELERATION: 0.05         // v10.6: was 0.08 (Joe: too quick). 90% top speed in 2.1 s
 MAX_FORWARD_SPEED: 6            // v10: cut from 9 (Joe: "way too fast")
 MAX_REVERSE_SPEED: 6            // same as forward when healthy
-ROLLING_FRICTION: 0.975
-MUD_DRAG: 0.965
+COAST_DRAG: 0.99                // v10.6 coasting: v = v*0.99 - 0.025 (2.0 s to stop from full)
+COAST_DECEL: 0.025              //   (replaced ROLLING_FRICTION*MUD_DRAG, which out-stopped the brakes)
+BRAKE_DECEL: 0.09               // v10.6: was 2.5x accel. Full speed to stop: 1.1 s, 193 px slide
+LOCKED_STEER: 0.35              // steering authority while braking (wheels locked)
+LOCKED_GRIP: 0.4                // grip multiplier while braking: the car slides
+WHEELSPIN_LAUNCH: 0.7           // drive lost at launch from rest / direction change
+WHEELSPIN_RECOVERY: 0.016       // per frame (~0.75 s to full traction; slower in rain)
 MAX_STEER_ANGLE: 0.42
 STEER_SPEED: 0.04               // v10: was 0.055
 STEER_RETURN_SPEED: 0.08
