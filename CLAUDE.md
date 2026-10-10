@@ -74,8 +74,8 @@ These were tuned iteratively with Joe providing direct feedback. v9/v10 are sign
 
 ```javascript
 BASE_ACCELERATION: 0.05         // v10.6: was 0.08 (Joe: too quick). 90% top speed in 2.1 s
-MAX_FORWARD_SPEED: 6            // v10: cut from 9 (Joe: "way too fast")
-MAX_REVERSE_SPEED: 6            // same as forward when healthy
+MAX_FORWARD_SPEED: 5.4          // v10.7: -10% (Joe). v10 cut 9 -> 6
+MAX_REVERSE_SPEED: 5.4          // same as forward when healthy
 COAST_DRAG: 0.99                // v10.6 coasting: v = v*0.99 - 0.025 (2.0 s to stop from full)
 COAST_DECEL: 0.025              //   (replaced ROLLING_FRICTION*MUD_DRAG, which out-stopped the brakes)
 BRAKE_DECEL: 0.09               // v10.6: was 2.5x accel. Full speed to stop: 1.1 s, 193 px slide

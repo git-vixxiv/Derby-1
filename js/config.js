@@ -6,12 +6,12 @@ const CAR_SCALE = 1.2; // 20% larger cars
 // Derby rule: every car must INITIATE contact with a live car within this
 // time or it's out. Taking a hit doesn't reset it (see resolveCollision).
 const CONTACT_TIMEOUT = 30 * 60; // 30 seconds at 60fps (was 45 and any contact counted)
-const CONTACT_INITIATE_SPEED = 0.6; // must be driving into the other car at least this fast (top speed 6)
+const CONTACT_INITIATE_SPEED = 0.6; // must be driving into the other car at least this fast (top speed 5.4)
 
 const PHYSICS = {
   BASE_ACCELERATION: 0.05,  // v10.6: was 0.08 (Joe: accelerating too fast)
-  MAX_FORWARD_SPEED: 6,  // v10: cut from 9 (Joe: "way too fast")
-  MAX_REVERSE_SPEED: 6,  // Same as forward when healthy
+  MAX_FORWARD_SPEED: 5.4,  // v10.7: -10% (Joe). Was 9 -> 6 in v10
+  MAX_REVERSE_SPEED: 5.4,  // Same as forward when healthy
   // Off the throttle in mud (v10.6): v = v * COAST_DRAG - COAST_DECEL.
   // Was a flat 5.9%/frame loss, which stopped a coasting car faster than
   // braking did.
