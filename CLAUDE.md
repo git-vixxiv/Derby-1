@@ -27,7 +27,7 @@ Modular build:
 - `js/math.js` — vector math, hsl, dist, normAngle, clamp, formatTime, getUniqueNumber/Color
 - `js/audio.js` — master bus + compressor, recorded sounds loaded from `sounds/` (engine loop, layered crashes) with the synthesized versions as fallback, metal scrape, mute toggle
 - `sounds/` — recorded sound files + `README.md` (what each is, how to replace) + `CREDITS.md`; `sound-test.html` at the root auditions them
-- `images/` — `splash.jpg` (title-screen art, **not yet supplied by Joe**; gradient shows until it is) + `README.md`
+- `images/` — `splash.jpg` (title-screen art from Joe: night stadium, pink #69 sedan; 1920 px wide, 453 KB, resized from his upload) + `README.md`
 - `js/car.js` — geometry, createCar, damage % helpers, modifiers (speed/accel/steer)
 - `js/collision.js` — SAT detection, OBB checks, resolveCollision, applyDamage, getZoneDamageMultiplier, spawnDamagePopup
 - `js/physics.js` — updateCarPhysics
@@ -174,7 +174,7 @@ If you add a new module, append a `<script src="js/your-module.js"></script>` li
 - ~~Power-ups~~ — rejected by Joe: no in-event advantages or track pickups
 - ~~Online leaderboards~~ — not wanted for now
 - v11.1 shipped Joe's calls: driver's-door rule, no scoring, recorded sounds, no damage numbers or health bars, pause.
-- Waiting on Joe: clean splash art (`images/splash.jpg`, scene only, no text or panels); his verdict on each recorded sound; better recordings if he can get real derby audio (see `sounds/README.md`).
+- Waiting on Joe: his verdict on each recorded sound; better recordings if he can get real derby audio (see `sounds/README.md`).
 
 ## How Joe works
 

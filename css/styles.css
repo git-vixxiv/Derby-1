@@ -151,13 +151,15 @@ body.touch #countdown-overlay { z-index: 5; }
 
 /* ===== Splash screen (v11.1), after Joe's mockup: stadium art behind,
    riveted metal panel on the left, clipboard on the right. The art is
-   images/splash.jpg; until that file exists the gradient shows instead. ===== */
+   images/splash.jpg (Joe's stadium scene); the gradient under it only shows
+   while the picture loads. Positioned a little high so the car sits below
+   the clipboard on wide screens. ===== */
 #menu-overlay.splash {
   position: fixed; inset: 0; z-index: 20; border-radius: 0; overflow-y: auto;
   justify-content: flex-start; align-items: stretch; padding: 0;
   background:
     linear-gradient(180deg, rgba(6,8,14,0.55) 0%, rgba(6,8,14,0.05) 30%, rgba(14,9,5,0.35) 100%),
-    url(../images/splash.jpg) center / cover no-repeat,
+    url(../images/splash.jpg) center 25% / cover no-repeat,
     radial-gradient(ellipse at 50% 22%, #39415c 0%, #161a26 45%, #1c130b 100%);
 }
 .splash-title {
