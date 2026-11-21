@@ -239,10 +239,20 @@ function hitWall(car, intoWall, depth, velX, velY) {
 
   const impact = applyWallDamage(car, intoWall, velX, velY);
 
-  // Driving into the wall stops the car; knockback bounces off it
+  // The wall takes away the part of the car's motion that points into it:
+  // square-on stops the car, a glancing touch scrapes along and keeps most
+  // of its speed. (Before v11 any touch cut speed by 90%, so a car lying
+  // along a wall could be pinned there, unable to pull away.)
   const ma = car.moveAngle ?? car.angle;
-  const driveInto = Math.cos(ma) * car.speed * intoWall.x + Math.sin(ma) * car.speed * intoWall.y;
-  if (driveInto > 0) car.speed *= 0.1;
+  const dirSign = car.speed >= 0 ? 1 : -1;
+  const hx = Math.cos(ma) * dirSign, hy = Math.sin(ma) * dirSign; // direction of travel
+  const into = hx * intoWall.x + hy * intoWall.y;
+  if (into > 0 && Math.abs(car.speed) > 0) {
+    const tx = hx - intoWall.x * into, ty = hy - intoWall.y * into; // what's left along the wall
+    const along = Math.hypot(tx, ty);
+    car.speed *= Math.max(0.1, along) * 0.985; // 0.985: scraping
+    if (along > 0.2) car.moveAngle = Math.atan2(ty * dirSign, tx * dirSign);
+  }
   const kn = car.vx * intoWall.x + car.vy * intoWall.y;
   if (kn > 0) {
     car.vx -= intoWall.x * kn * 1.3;

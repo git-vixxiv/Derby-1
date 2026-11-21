@@ -13,7 +13,7 @@ function showOverlay(type) {
     document.getElementById('completed-level').textContent = level;
     document.getElementById('level-score').textContent = score;
     document.getElementById('cars-wrecked').textContent = carsWrecked;
-    document.getElementById('round-time').textContent = formatTime(Date.now() - roundStartTime);
+    document.getElementById('round-time').textContent = formatTime(frameCount / 60 * 1000);
     document.getElementById('level-overlay').classList.remove('hidden');
   } else if (type === 'gameover') {
     document.getElementById('final-level').textContent = level;
@@ -36,7 +36,7 @@ function updateHUD() {
   document.getElementById('hud-score').textContent = score;
 
   if (gameState === 'playing') {
-    document.getElementById('timer-display').textContent = formatTime(Date.now() - roundStartTime);
+    document.getElementById('timer-display').textContent = formatTime(frameCount / 60 * 1000);
 
     const framesSinceContact = frameCount - player.lastContactFrame;
     const secondsRemaining = Math.ceil((CONTACT_TIMEOUT - framesSinceContact) / 60);

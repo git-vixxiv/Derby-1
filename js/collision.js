@@ -147,10 +147,6 @@ function resolveCollision(car1, car2, collision) {
     return;
   }
 
-  // Closing speeds for damage, captured before the impulse slows the cars
-  const preSpeed1 = Math.abs(car1.speed) + Math.hypot(car1.vx || 0, car1.vy || 0);
-  const preSpeed2 = Math.abs(car2.speed) + Math.hypot(car2.vx || 0, car2.vy || 0);
-
   // Calculate impulse
   const e = P.RESTITUTION;
   const m1 = car1.carType.weight;
@@ -196,21 +192,21 @@ function resolveCollision(car1, car2, collision) {
   // Separate overlapping cars
   separateCars(car1, car2, collision);
 
-  // Apply damage based on impact zone
-  // Scaled so impacts at the current top speed match the tuned damage
-  // at the old top speed (see DAMAGE_SPEED_SCALE)
-  const impactForce = Math.abs(j) * 0.8 * DAMAGE_SPEED_SCALE;
-  applyDamage(car1, car2, collision, impactForce, preSpeed1, preSpeed2);
+  // Damage: energy of the hit from the closing speed at the contact point
+  // (velAlongNormal was captured before the impulse changed it)
+  const closing = -velAlongNormal / P.MAX_FORWARD_SPEED;
+  const energy = DAMAGE.HIT_AT_TOP_SPEED * Math.min(DAMAGE.MAX_ENERGY, closing * closing);
+  applyDamage(car1, car2, collision, energy);
 
   // Sparks at contact point
-  spawnSparks(collision.contactPoint.x, collision.contactPoint.y, 4 + Math.floor(impactForce * 0.3));
+  spawnSparks(collision.contactPoint.x, collision.contactPoint.y, 3 + Math.min(12, Math.floor(energy / 15)));
 
   // Crash sound - louder for player involvement or harder hits.
   // Light contact below the threshold is left to the scrape loop so
   // shoving matches don't machine-gun crash samples.
   const playerInvolved = car1.isPlayer || car2.isPlayer;
-  if (impactForce > 0.8) {
-    playCrashSound(impactForce * (playerInvolved ? 1.2 : 0.6), collision.contactPoint.x);
+  if (closing > 0.08) {
+    playCrashSound(closing * 10 * (playerInvolved ? 1.2 : 0.6), collision.contactPoint.x);
   }
 }
 
@@ -261,97 +257,63 @@ function separateCars(car1, car2, collision) {
   }
 }
 
-function applyDamage(car1, car2, collision, impactForce, preSpeed1, preSpeed2) {
+// Both cars take the hit's energy, each scaled by the toughness of the
+// zone it was hit on and by the weights (the heavier car comes off better).
+function applyDamage(car1, car2, collision, energy) {
+  if (energy < 0.5) return; // leaning and shoving, not a hit
+
   const zone1 = getImpactZone(car1, collision.contactPoint);
   const zone2 = getImpactZone(car2, collision.contactPoint);
 
   const type1 = car1.carType;
   const type2 = car2.carType;
+  const totalWeight = type1.weight + type2.weight;
 
-  // Speed bonus damage
-  // On the old top-speed-9 scale the formulas below were tuned for
-  const speed1 = preSpeed1 * DAMAGE_SPEED_SCALE;
-  const speed2 = preSpeed2 * DAMAGE_SPEED_SCALE;
-  // Speed-bonus damage scales super-linearly so high-speed hits hurt
-  // proportionally more, matching kinetic-energy intuition. Tuned
-  // iteratively: started at *2.5 linear (hits felt glancing), bumped
-  // to pow(_, 1.7) * 4 (better but mid-range hits at speed 6-7 still
-  // felt weak), now pow(_, 1.9) * 5 — a speed-7 ram does ~108 bonus
-  // damage (was ~64), and a max-speed hit does ~194 (was ~110).
-  const speedBonus1 = speed1 > 2 ? Math.pow(speed1 - 2, 1.9) * 5 : 0;
-  const speedBonus2 = speed2 > 2 ? Math.pow(speed2 - 2, 1.9) * 5 : 0;
-
-  // Apply damage to car1
-  const dmg1 = (impactForce + speedBonus2) * getZoneDamageMultiplier(zone1, type1);
-  if (zone1 === 'front') car1.frontDamage += dmg1;
-  else if (zone1 === 'rear') car1.rearDamage += dmg1;
-  else car1.sideDamage += dmg1;
-  addDeformation(car1, collision.contactPoint, zone1, dmg1);
-
-  // Apply damage to car2
-  const dmg2 = (impactForce + speedBonus1) * getZoneDamageMultiplier(zone2, type2);
-  if (zone2 === 'front') car2.frontDamage += dmg2;
-  else if (zone2 === 'rear') car2.rearDamage += dmg2;
-  else car2.sideDamage += dmg2;
-  addDeformation(car2, collision.contactPoint, zone2, dmg2);
-
-  // Spawn damage popup numbers for ALL hits
-  if (dmg1 >= 1) {
-    spawnDamagePopup(car1.x, car1.y - 45, Math.round(dmg1), car1.isPlayer ? '#ff4444' : '#ffaa00');
-  }
-  if (dmg2 >= 1) {
-    spawnDamagePopup(car2.x, car2.y - 45, Math.round(dmg2), car2.isPlayer ? '#ff4444' : '#ffaa00');
+  const dmg1 = energy * getZoneDamageMultiplier(zone1, type1) * (2 * type2.weight / totalWeight);
+  const dmg2 = energy * getZoneDamageMultiplier(zone2, type2) * (2 * type1.weight / totalWeight);
+  for (const [car, zone, dmg] of [[car1, zone1, dmg1], [car2, zone2, dmg2]]) {
+    if (car.disabled) continue; // wrecks are already out
+    if (zone === 'front') car.frontDamage += dmg;
+    else if (zone === 'rear') car.rearDamage += dmg;
+    else car.sideDamage += dmg;
+    addDeformation(car, collision.contactPoint, zone, dmg);
+    if (dmg >= 1) {
+      spawnDamagePopup(car.x, car.y - 45, Math.round(dmg), car.isPlayer ? '#ff4444' : '#ffaa00');
+    }
   }
 
-  // Visual effects based on impact force
-  const totalSpeed = speed1 + speed2;
+  // Visual effects for anything harder than a nudge
+  if (energy > 6) {
+    for (const [car, zone, dmg] of [[car1, zone1, dmg1], [car2, zone2, dmg2]]) {
+      // Contact point in the car's own space, for scratches and dents
+      const local = vecRotate(vecSub(collision.contactPoint, vec(car.x, car.y)), -car.angle);
+      car.impactMarks.push({
+        x: local.x,
+        y: local.y,
+        zone,
+        severity: Math.min(dmg / 50, 1),
+        angle: Math.random() * Math.PI,
+        type: Math.random() > 0.5 ? 'scratch' : 'dent'
+      });
+      if (car.impactMarks.length > 15) car.impactMarks.shift();
+      car.lastHitFlash = frameCount;
+    }
 
-  if (impactForce > 1.5 || totalSpeed > 3) {
-    // Transform contact point to each car's local space for impact marks
-    const localPoint1 = vecRotate(vecSub(collision.contactPoint, vec(car1.x, car1.y)), -car1.angle);
-    const localPoint2 = vecRotate(vecSub(collision.contactPoint, vec(car2.x, car2.y)), -car2.angle);
-
-    // Add impact marks (scratches/dents) to both cars
-    car1.impactMarks.push({
-      x: localPoint1.x,
-      y: localPoint1.y,
-      zone: zone1,
-      severity: Math.min(dmg1 / 50, 1),
-      angle: Math.random() * Math.PI,
-      type: Math.random() > 0.5 ? 'scratch' : 'dent'
-    });
-    car2.impactMarks.push({
-      x: localPoint2.x,
-      y: localPoint2.y,
-      zone: zone2,
-      severity: Math.min(dmg2 / 50, 1),
-      angle: Math.random() * Math.PI,
-      type: Math.random() > 0.5 ? 'scratch' : 'dent'
-    });
-
-    // Limit stored marks
-    if (car1.impactMarks.length > 15) car1.impactMarks.shift();
-    if (car2.impactMarks.length > 15) car2.impactMarks.shift();
-
-    // Flash effect
-    car1.lastHitFlash = frameCount;
-    car2.lastHitFlash = frameCount;
-
-    // Spawn debris (metal chunks)
-    const debrisCount = Math.floor(impactForce * 0.5 + totalSpeed * 0.3);
+    // Metal chunks
+    const debrisCount = Math.min(10, Math.floor(energy / 14));
     if (debrisCount > 0) {
       spawnDebris(collision.contactPoint.x, collision.contactPoint.y, '#666', debrisCount);
     }
 
-    // Spawn paint chips from both cars
-    if (totalSpeed > 4 || impactForce > 3) {
+    // Paint chips from both cars
+    if (energy > 20) {
       spawnPaintChips(collision.contactPoint.x, collision.contactPoint.y, car1.color, 2 + Math.floor(Math.random() * 3));
       spawnPaintChips(collision.contactPoint.x, collision.contactPoint.y, car2.color, 2 + Math.floor(Math.random() * 3));
     }
   }
 
   // Add dents (legacy system)
-  if (impactForce > 2) {
+  if (energy > 12) {
     car1.dents.push({ x: (Math.random() - 0.5) * type1.width, y: (Math.random() - 0.5) * type1.length * 0.4 });
     car2.dents.push({ x: (Math.random() - 0.5) * type2.width, y: (Math.random() - 0.5) * type2.length * 0.4 });
   }

@@ -49,17 +49,21 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, an
   car.braking = wantDir !== 0 && moving !== 0 && wantDir !== moving;
 
   if (car.braking) {
-    const prev = car.speed;
-    car.speed -= moving * P.BRAKE_DECEL;
-    if (Math.sign(car.speed) !== Math.sign(prev)) car.speed = 0; // stop, don't flip
+    // Locked wheels on top of the mud's own drag; stop, don't flip direction
+    const s = Math.abs(car.speed) * P.COAST_DRAG - P.COAST_DECEL - P.BRAKE_DECEL;
+    car.speed = s > 0 ? moving * s : 0;
     car.driveDir = 0;
   } else if (wantDir !== 0) {
     // New launch (from rest or a change of direction): tires spin first
+    // (most from a standstill, less if the car is already rolling)
     if (car.driveDir !== wantDir && Math.abs(car.speed) < 1) {
-      car.wheelspin = Math.max(car.wheelspin || 0, P.WHEELSPIN_LAUNCH);
+      car.wheelspin = Math.max(car.wheelspin || 0, P.WHEELSPIN_LAUNCH * (1 - Math.abs(car.speed)));
     }
     car.driveDir = wantDir;
-    car.speed += wantDir * accel * (1 - (car.wheelspin || 0));
+    // Pull fades toward top speed, so reaching it takes a while
+    const top = wantDir > 0 ? maxForward : maxReverse;
+    const taper = 1 - P.ACCEL_TAPER * Math.min(1, Math.abs(car.speed) / top);
+    car.speed += wantDir * accel * taper * (1 - (car.wheelspin || 0));
     car.wheelspin = Math.max(0, (car.wheelspin || 0) - P.WHEELSPIN_RECOVERY * weather.grip); // slower to bite in the rain
     if (car.speed > maxForward) car.speed = maxForward;
     if (car.speed < -maxReverse) car.speed = -maxReverse;
@@ -81,16 +85,31 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, an
   car.wobble = (car.wobble || 0) * 0.9 + (Math.random() - 0.5) * 2 * P.DAMAGE_WOBBLE_MAX * wheelDamage * 0.1;
   car.effSteer = car.steerAngle + (car.pullDir || 0) * frontPct * P.DAMAGE_PULL_MAX + car.wobble;
 
+  // Sideways grip available right now: less with bent wheels, in the rain
+  // and on locked wheels. It caps how fast the path can bend (rad/step).
+  const lateralGrip = P.LATERAL_GRIP
+    * (1 - P.GRIP_LOSS_FROM_DAMAGE * wheelDamage)
+    * weather.grip
+    * (car.braking ? P.LOCKED_GRIP : 1);
+  const maxPathRate = lateralGrip / Math.max(absSpeed, 0.5);
+
   if (absSpeed > P.MIN_SPEED_TO_TURN && Math.abs(car.effSteer) > 0.01) {
     const turnRadius = wheelBase / Math.tan(Math.abs(car.effSteer));
     const turnDir = Math.sign(car.effSteer);
     // Locked wheels barely steer while the car slides under braking
     const steerAuthority = car.braking ? P.LOCKED_STEER : 1;
-    car.angularVel += (car.speed / turnRadius) * turnDir * 0.15 * steerAuthority;
+    // What the steering geometry asks for, limited by what the mud gives:
+    // at speed the front tires wash out and the car won't rotate as asked
+    const yawPush = Math.min(absSpeed / turnRadius * steerAuthority, maxPathRate * P.YAW_OVER_GRIP);
+    car.angularVel += yawPush * Math.sign(car.speed) * turnDir * 0.15;
 
-    // Turning costs speed (friction from tires scrubbing)
-    const turnSpeedLoss = Math.abs(car.effSteer) * absSpeed * 0.012;
-    car.speed *= (1 - turnSpeedLoss);
+    // Turning costs speed (tires scrubbing). Cornering force grows with
+    // the square of speed until the grip runs out, so the drag does too:
+    // next to nothing at a crawl (a weak, damaged engine can still pull
+    // away on full lock), the full amount from about half speed up.
+    const cornerLoad = Math.min(1, (absSpeed / (P.MAX_FORWARD_SPEED * 0.5)) ** 2);
+    const turnDrag = P.TURN_DRAG * cornerLoad * Math.abs(car.effSteer) / P.MAX_STEER_ANGLE;
+    car.speed = Math.sign(car.speed) * Math.max(0, absSpeed - turnDrag);
 
     // Lateral slide - set directly instead of accumulating to prevent speed burst
     const slideAmount = absSpeed * Math.abs(car.effSteer) * 0.03;
@@ -127,9 +146,10 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, an
       * weather.grip
       * (car.braking ? P.LOCKED_GRIP : 1);
     const slip = normAngle(car.angle - car.moveAngle);
-    car.moveAngle += slip * grip;
+    car.moveAngle += clamp(slip * grip, -maxPathRate, maxPathRate);
     // Sliding sideways scrubs speed
-    car.speed *= 1 - P.SLIDE_SCRUB * Math.abs(Math.sin(slip));
+    const slideDrag = P.SLIDE_DRAG * Math.abs(Math.sin(slip));
+    car.speed = Math.sign(car.speed) * Math.max(0, Math.abs(car.speed) - slideDrag);
   }
 
   // Movement (combine drive velocity and impact velocity)
@@ -173,13 +193,16 @@ function updateCarPhysics(car, inputGas, inputReverse, inputLeft, inputRight, an
 // Wall impact: the contact point is the car's deepest point toward the
 // wall. Corners within a few units of that depth are averaged, so a car
 // flush against the wall with its door registers as a side hit and a
-// square nose-in registers as front-center. Zone multipliers and model
-// strengths are the same ones car-to-car hits use.
-const WALL_DAMAGE_PER_SPEED = 3;
+// square nose-in registers as front-center. Damage goes with the square
+// of the speed into the wall, with the same zone multipliers and model
+// strengths car-to-car hits use.
 
 // Returns the impact speed (velocity into the wall) for the crash sound.
 function applyWallDamage(car, wallNormal, velX, velY) {
-  const impactSpeed = Math.max(0, velX * wallNormal.x + velY * wallNormal.y) * DAMAGE_SPEED_SCALE;
+  const into = Math.max(0, velX * wallNormal.x + velY * wallNormal.y);
+  const impactSpeed = into * DAMAGE_SPEED_SCALE; // for the crash sound
+  const closing = into / PHYSICS.MAX_FORWARD_SPEED;
+  const energy = DAMAGE.HIT_AT_TOP_SPEED * DAMAGE.WALL_FACTOR * Math.min(DAMAGE.MAX_ENERGY, closing * closing);
   const corners = getCarCorners(car);
   const depths = corners.map(c => vecDot(c, wallNormal));
   const maxDepth = Math.max(...depths);
@@ -190,10 +213,12 @@ function applyWallDamage(car, wallNormal, velX, velY) {
   );
 
   const zone = getImpactZone(car, contact);
-  const dmg = impactSpeed * WALL_DAMAGE_PER_SPEED * getZoneDamageMultiplier(zone, car.carType);
-  if (zone === 'front') car.frontDamage += dmg;
-  else if (zone === 'rear') car.rearDamage += dmg;
-  else car.sideDamage += dmg;
-  addDeformation(car, contact, zone, dmg);
+  const dmg = energy * getZoneDamageMultiplier(zone, car.carType);
+  if (dmg >= 0.5) {
+    if (zone === 'front') car.frontDamage += dmg;
+    else if (zone === 'rear') car.rearDamage += dmg;
+    else car.sideDamage += dmg;
+    addDeformation(car, contact, zone, dmg);
+  }
   return impactSpeed;
 }

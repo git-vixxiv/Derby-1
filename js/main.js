@@ -35,47 +35,81 @@ updateMenuSettings();
 setupMobile();
 
 // ==================== MAIN LOOP ====================
-function gameLoop() {
-  if (gameState === 'countdown') {
-    countdownTimer++;
-    if (countdownTimer >= 60) {
-      countdownTimer = 0;
-      countdownValue--;
-      if (countdownValue < 0) {
-        gameState = 'playing';
-        roundStartTime = Date.now();
-        allCars.forEach(c => c.lastContactFrame = frameCount);
-        document.getElementById('countdown-overlay').classList.add('hidden');
-      }
-    }
+// The game logic always advances at 60 steps per second, whatever the
+// screen's refresh rate. (Before v11 it advanced one step per screen
+// refresh, so a 120 Hz display ran the whole game at double speed and a
+// phone in low-power mode ran it at half speed.)
+const STEP_MS = 1000 / 60;
+let lastFrameTime = null;
+let stepDebt = 0;
 
-    updateMobileSteering(); // calibrates tilt neutral during the countdown
-    // Engines idle at the line; holding gas or reverse revs in place
-    updateEngineSound(0, controls.gas || controls.reverse);
-    updateFieldSound(enemies);
+// How many logic steps are due this screen refresh
+function stepsDue(now) {
+  if (lastFrameTime === null) lastFrameTime = now;
+  let elapsed = now - lastFrameTime;
+  lastFrameTime = now;
+  if (elapsed > 250) elapsed = STEP_MS; // tab was hidden or the page hitched: don't fast-forward
+  // Snap near-60 Hz and near-30 Hz frames to whole steps so ordinary
+  // timing jitter never causes a skipped or doubled step
+  if (Math.abs(elapsed - STEP_MS) < 2) elapsed = STEP_MS;
+  else if (Math.abs(elapsed - STEP_MS * 2) < 3) elapsed = STEP_MS * 2;
+  stepDebt += elapsed;
+  const steps = Math.min(4, Math.floor(stepDebt / STEP_MS + 0.001));
+  stepDebt = Math.min(stepDebt - steps * STEP_MS, STEP_MS);
+  return steps;
+}
 
-    drawArena();
-    disabledCars.forEach(drawCar);
-    allCars.forEach(drawCar);
-    drawWeather();
-    if (player) drawPlayerHighlight(player);
-    drawCountdown();
-    updateHUD();
-    requestAnimationFrame(gameLoop);
-    return;
-  }
+function gameLoop(now) {
+  requestAnimationFrame(gameLoop);
+  const steps = stepsDue(now === undefined ? performance.now() : now);
 
   if (gameState === 'garage') {
     drawGaragePreview();
-    requestAnimationFrame(gameLoop);
     return;
   }
+  if (steps === 0) return; // faster-than-60 Hz screen: nothing new to show yet
 
-  if (gameState !== 'playing') {
-    requestAnimationFrame(gameLoop);
-    return;
+  let ran = null;
+  for (let i = 0; i < steps; i++) {
+    if (gameState === 'countdown') { updateCountdown(); ran = 'countdown'; }
+    else if (gameState === 'playing') { updateGame(); ran = 'playing'; }
+    else break;
+  }
+  if (ran === 'countdown') renderCountdown();
+  else if (ran === 'playing') renderGame();
+}
+
+function updateCountdown() {
+  countdownTimer++;
+  if (countdownTimer >= 60) {
+    countdownTimer = 0;
+    countdownValue--;
+    if (countdownValue < 0) {
+      gameState = 'playing';
+      allCars.forEach(c => c.lastContactFrame = frameCount);
+      document.getElementById('countdown-overlay').classList.add('hidden');
+    }
   }
 
+  updateMobileSteering(); // calibrates tilt neutral during the countdown
+  // Engines idle at the line; holding gas or reverse revs in place
+  updateEngineSound(0, controls.gas || controls.reverse);
+  updateFieldSound(enemies);
+}
+
+function renderCountdown() {
+  drawArena();
+  disabledCars.forEach(drawCar);
+  allCars.forEach(drawCar);
+  drawWeather();
+  if (player) drawPlayerHighlight(player);
+  drawCountdown();
+  updateHUD();
+}
+
+// One 1/60 s step of the derby: input, AI, physics, collisions, rules.
+// No drawing, so it can also be run flat-out for testing.
+function updateGame() {
   frameCount++;
 
   // Update player
@@ -197,6 +231,14 @@ function gameLoop() {
     return p.life > 0;
   });
 
+  // Damage popups float up and fade
+  damagePopups = damagePopups.filter(popup => {
+    popup.life--;
+    popup.y += popup.vy;
+    popup.vy *= 0.95;
+    return popup.life > 0;
+  });
+
   // Win/lose
   if (gameMode === 'championship') {
     checkChampionshipRound();
@@ -226,7 +268,9 @@ function gameLoop() {
     }
   }
 
-  // Render
+}
+
+function renderGame() {
   drawArena();
   disabledCars.forEach(drawCar);
   allCars.filter(c => !c.disabled).forEach(drawCar);
@@ -236,15 +280,7 @@ function gameLoop() {
     drawHealthBar(car);
   });
 
-  // Update and draw damage popups
-  damagePopups = damagePopups.filter(popup => {
-    popup.life--;
-    popup.y += popup.vy;
-    popup.vy *= 0.95; // Slow down float
-
-    if (popup.life <= 0) return false;
-
-    // Draw popup
+  damagePopups.forEach(popup => {
     const alpha = Math.min(popup.life / 20, 1);
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -256,8 +292,6 @@ function gameLoop() {
     ctx.fillStyle = popup.color;
     ctx.fillText('-' + popup.damage, popup.x, popup.y);
     ctx.restore();
-
-    return true;
   });
 
   // Particles
@@ -309,8 +343,6 @@ function gameLoop() {
   drawWeather();
 
   updateHUD();
-
-  requestAnimationFrame(gameLoop);
 }
 
 // ==================== CONTROLS ====================

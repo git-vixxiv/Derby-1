@@ -18,7 +18,7 @@ Joe owns product direction and testing. Joe has deep domain knowledge of real-wo
 4. **Realistic damage zones.** Front (engine) is most critical, rear is most protected, sides are in between. Damage visibly accumulates with persistent scratches and dents.
 5. **No roleplay, no gimmicks.** This is a serious arcade recreation, not a cartoon.
 
-## Current state (v10)
+## Current state (v11)
 
 Modular build:
 - `index.html` (~131 lines) — HTML structure + ordered `<script>` tags
@@ -29,7 +29,7 @@ Modular build:
 - `js/car.js` — geometry, createCar, damage % helpers, modifiers (speed/accel/steer)
 - `js/collision.js` — SAT detection, OBB checks, resolveCollision, applyDamage, getZoneDamageMultiplier, spawnDamagePopup
 - `js/physics.js` — updateCarPhysics
-- `js/ai.js` — updateAI (state machine)
+- `js/ai.js` — updateAI (states: scanning → attacking → retreating, plus unsticking), aiPickAttack (target + which end to ram with), aiWreckInPath
 - `js/particles.js` — spawnSparks/Debris/PaintChips/Smoke
 - `js/rendering.js` — drawCar, drawArena, drawPowerUp, drawCountdown, drawHealthBar
 - `js/hud.js` — showOverlay, updateHUD, updateHighScoreDisplay
@@ -39,22 +39,31 @@ Modular build:
 - `js/championship.js` — tournament flow, simulated field damage, round-end overlays
 - `js/game.js` — initGame (Quick Derby field), placeField (any field, keeps damage), generateStartPositions, startGame, nextLevel, startCountdown
 - `js/mobile.js` — tilt + touch-pad steering, permission, steering setting, fullscreen
-- `js/main.js` — global state, controls, gameLoop, event listeners, bootstrap
+- `js/main.js` — global state, controls, fixed-timestep gameLoop (`updateGame` = one 1/60 s step with no drawing, `renderGame`), event listeners, bootstrap
 
 All JS uses classic `<script>` tags loaded in dependency order — no build step, no ES modules. Functions and `let`/`const` declarations remain global so inline `onclick="startGame()"` handlers in `index.html` continue to work. Open `index.html` directly in a browser, or use `python -m http.server` to avoid file:// quirks. Deployed and playable.
 
 **Features shipped:**
 - Front-axle steering physics with realistic pivot behavior
 - Oriented Bounding Box (OBB / SAT) collision detection
+- **Fixed 60 Hz timestep** (v11). Logic advances 60 steps/s on any display; rendering is capped at 60 fps. Before v11 it ran one step per screen refresh, so a 120 Hz screen played at double speed and low-power phones at half speed. `updateGame()` does no drawing, so tests can run thousands of steps flat out (override `requestAnimationFrame`, call `updateGame()` in a loop).
 - Momentum-based collision response with angular impulse. Impulse goes into drive speed along the direction of travel (a rammer is stopped by the hit) and the rest into knockback. v10 fixed an inverted approach test that made head-on rams deal no damage.
-- Braking and launching in mud (v10.6, Joe): pedal opposite to travel = brakes; the wheels lock, the car slides with little steering (half-second full-lock turn: 12° braking vs 49° on the gas). Launching from rest or changing direction starts with wheelspin (mud spray) and builds traction. Full forward → full reverse: 3.2 s (was 1.6 s).
-- Mud traction: direction of travel (`moveAngle`) lags heading, so cars slide through turns; less grip at speed and with damage. Front damage pulls steering toward the hit side and adds wheel wobble.
-- Per-zone damage (front/side/rear) with separate HP pools. Two measures: **condition** (zone damage ÷ pool, capped at 100%) drives visuals and handling — front kills steering (to 5–15%) and some power, rear kills speed/acceleration, side a bit of both. **Life** (`getLifeUsed`) keeps counting past 100%: out when front/(pool×3.5) + side/(pool×4.5) + rear/(pool×4) ≥ 1 (`CAR_LIFE` in config). At 75% ram speed: 6 front, 10 side or 14 rear hits. Health bar above cars shows life; HUD zone bars show condition. Fire only when life < 25%.
+- **Mud handling (v11, Joe).** Real-world scale: 1 ft = 4.32 px, 1 mph = 0.1056 px/step (`PX_PER_FOOT`, `SPEED_PER_MPH`); use these to talk tuning with Joe in mph and feet.
+  - Top speed 4.0 px/step ≈ 38 mph at scale (a real mud derby is ~25).
+  - Acceleration tapers toward top speed and starts with wheelspin: 50% speed in 1.7 s, 90% in 3.5 s / 404 px.
+  - Brakes lock the wheels and the car slides: 2.4 s / 263 px (3.4 car lengths) from top speed; coasting takes 3.8 s / 416 px. Full forward → full reverse: 5.8 s. While braking the path can barely be steered (12° in 1 s).
+  - Sideways grip is capped (`LATERAL_GRIP`), so the tightest turn widens with speed²: full steering up to ~55% of top speed, then the car plows wide with the nose swung in (a slide). From top speed on full lock the path turns 32° in the first second (was 77°) and a U-turn is 389 px wide (was 199). You have to slow down to turn.
+  - Cornering drag is an absolute deceleration that fades to zero at a crawl, so a hard turn can't out-brake the brakes and a damaged engine can still pull away on full lock.
+  - A wall takes away only the part of the car's motion pointing into it: square-on stops the car, a glancing touch scrapes along. (Before v11 any wall touch cut speed 90%, which could pin a car lying along a wall.)
+- Mud traction: direction of travel (`moveAngle`) lags heading; less grip at speed, with damage and in rain. Front damage pulls steering toward the hit side and adds wheel wobble.
+- **Damage model (v11): both cars take every hit.** Energy = `DAMAGE.HIT_AT_TOP_SPEED` (260) × (closing speed at the contact point ÷ top speed)², capped at 0.7×. Each car takes energy × its own zone multiplier (front 1.4, side 0.8, rear 0.5, ÷ model strength) × weight share. So a tail-first ram costs the rammer 0.5 while the door it hits takes 0.8 (an engine 1.4); a nose-first ram costs the rammer 1.4. **This is the engine-protection loop (design principle 2); before v11 the rammer took almost nothing either way.** Glancing contact does little (only the closing component counts). Walls: same formula × 0.3. Worst single hit: 29% of life (engine), 14% (door), 9% (tail). Typical solid hit at ~55% closing speed: 12% / 6% / 4%.
+- Per-zone damage (front/side/rear) with separate HP pools. Two measures: **condition** (zone damage ÷ pool, capped at 100%) drives visuals and handling — front kills steering (to 5–15%) and some power, rear kills speed/acceleration, side a bit of both. **Life** (`getLifeUsed`) keeps counting past 100%: out when front/(pool×2.2) + side/(pool×2.8) + rear/(pool×3.0) ≥ 1 (`CAR_LIFE` in config; lowered in v11 together with the new damage model). Acceleration never drops below 35% (was 20%) so a crippled car can still crawl to a hit. Health bar above cars shows life; HUD zone bars show condition. Fire only when life < 25%.
 - Visual damage accumulation — per-car deformation profile (`car.deform`): body outline caves in where hit, persistent creases, buckled hood, broken lamps, bent bumpers, grime; plus scratches/dents in car-local space
 - Particle systems: sparks, debris, paint chips, smoke, fire
 - Synthesized audio (no files): 12 pre-rendered crash buffers (3 weight classes × 4 variations) built from noise only — body thud, broadband crunch, crunch driven through a resonant filter bank for the steel-panel clang, debris ticks, hard saturation. Stereo-panned, volume scales with impact. Metal scrape loop for sustained contact. V8 engine loop of unpitched exhaust pops (pitch comes from firing rate only), rev at the line during countdown, muffled field-engine bed. Master compressor. `M` to mute (localStorage key `demolitionDerbyMuted`). **Avoid short tonal components** (damped sines, pitch sweeps): Joe heard them as water splashes and a horn.
-- AI opponents with state machine: scanning, approaching, positioning, charging, retreating, unsticking
-- **30-second hit rule** (Joe, v10.5): every car must *initiate* contact with a live car within 30 s or it's out. Only the car driving into the other (approach speed > `CONTACT_INITIATE_SPEED` 0.6) gets credit; taking a hit doesn't reset the clock, and hitting a dead car doesn't count. Head-ons credit both. HUD shows the player's hit clock at all times (gray → orange ≤15 s → red ≤5 s). AI goes on the attack at 40% of the clock (12 s).
+- AI opponents (`js/ai.js`, rewritten v11). Each driver picks a live car and which end to ram with (everyone leans toward the tail; more so with engine damage), drives at it leading its motion, slows down for corrections the mud won't allow at speed, brakes for walls using its real stopping distance, goes round wrecks, backs off 130–290 px for a run-up after each hit, and K-turns away from a wall instead of pushing into it. No bias toward the player (the old +80 targeting bonus is gone: Joe's no-advantage rule). **v11 fixed the old AI steering backwards in reverse: tail-first rammers (55% of the field) landed 0 hits/min; all drivers now land ~9/min on a parked car.** Known weak spot: Figure 8, where ~1.5 healthy cars per round still time out behind the islands.
+- Round pacing with 12 AI cars (measured, fast sim): heat (6 left) ≈ 107 s Fairgrounds / 116 s Oval / 92 s Figure 8; last car standing ≈ 175 s. First car out typically 20–40 s. About 60% of eliminations are wrecks and 40% are crippled cars timed out by the hit clock, none healthy on Fairgrounds/Oval.
+- **30-second hit rule** (Joe, v10.5): every car must *initiate* contact with a live car within 30 s or it's out. Only the car driving into the other gets credit; taking a hit doesn't reset the clock, and hitting a dead car doesn't count. Head-ons credit both. HUD shows the player's hit clock at all times (gray → orange ≤15 s → red ≤5 s). Approach speed threshold is `CONTACT_INITIATE_SPEED` 0.45 since v11. AI drops everything to go hit someone at 40% of the clock (12 s).
 - Cars start around arena perimeter facing outward (authentic derby start)
 - Keyboard controls (desktop). Phones (`js/mobile.js`): **tilt steering** (hold the phone like a wheel; gravity direction in the screen plane vs. a neutral captured during the countdown; 30° = full lock, 2° deadzone; orientation-independent and iPhone/Android sign-agnostic; iPhone needs a tap + permission prompt, requested from the Start buttons or the Steering menu setting) or a **drag-to-steer touch pad** (70 px = full lock). Both are analog: `updateCarPhysics(..., analogSteer)` moves the wheel toward the target at the normal steer rate. Landscape layout: arena full height center, REV left / GAS right (tilt) or pad left / REV+GAS right (touch). Portrait: steering area + REV + GAS under the arena. Menus go fullscreen and scroll on phones. Android goes fullscreen on Start.
 - Health bars above active cars
@@ -68,45 +77,60 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Per-model car stats (weight, acceleration, top speed, front/rear strength) — first pass, see roster below
 - High score persistence via localStorage (key: `demolitionDerbyHighScoreV9`)
 
-## Physics constants — current tuning (v10)
+## Physics constants — current tuning (v11)
 
-These were tuned iteratively with Joe providing direct feedback. v9/v10 are significantly faster and grippier than earlier versions; do not revert toward older values without explicit approval. Any change to these requires testing and approval.
+Tuned iteratively with Joe. He has asked for slower and muddier four times running (top speed 9 → 6 → 5.4 → 4.0); do not make the cars faster, grippier or quicker to stop without his say-so. Any change here needs measuring (see "How to test") and his approval.
 
 ```javascript
-BASE_ACCELERATION: 0.05         // v10.6: was 0.08 (Joe: too quick). 90% top speed in 2.1 s
-MAX_FORWARD_SPEED: 5.4          // v10.7: -10% (Joe). v10 cut 9 -> 6
-MAX_REVERSE_SPEED: 5.4          // same as forward when healthy
-COAST_DRAG: 0.99                // v10.6 coasting: v = v*0.99 - 0.025 (2.0 s to stop from full)
-COAST_DECEL: 0.025              //   (replaced ROLLING_FRICTION*MUD_DRAG, which out-stopped the brakes)
-BRAKE_DECEL: 0.09               // v10.6: was 2.5x accel. Full speed to stop: 1.1 s, 193 px slide
-LOCKED_STEER: 0.35              // steering authority while braking (wheels locked)
-LOCKED_GRIP: 0.4                // grip multiplier while braking: the car slides
-WHEELSPIN_LAUNCH: 0.7           // drive lost at launch from rest / direction change
-WHEELSPIN_RECOVERY: 0.016       // per frame (~0.75 s to full traction; slower in rain)
+MAX_FORWARD_SPEED: 4.0          // ~38 mph at scale. History: 9 -> 6 -> 5.4 -> 4.0
+MAX_REVERSE_SPEED: 4.0          // same as forward when healthy
+BASE_ACCELERATION: 0.03         // at a standstill. History: 0.04 -> 0.08 -> 0.05 -> 0.03
+ACCEL_TAPER: 0.7                // pull lost by top speed (30% left)
+COAST_DRAG: 0.998               // coasting: v = v*0.998 - 0.014 per step
+COAST_DECEL: 0.014
+BRAKE_DECEL: 0.011              // added to coasting drag while braking (wheels locked)
+LOCKED_STEER: 0.35              // steering authority while braking
+LOCKED_GRIP: 0.4                // sideways grip left while braking
+WHEELSPIN_LAUNCH: 0.7           // drive lost launching from rest (less if already rolling)
+WHEELSPIN_RECOVERY: 0.012       // per step (~1 s to full traction; slower in rain)
+LATERAL_GRIP: 0.05              // max sideways acceleration, px/step^2 (path curvature cap)
+YAW_OVER_GRIP: 1.35             // how much faster than the path the nose may swing (the slide)
+TURN_DRAG: 0.012                // decel at full lock from half speed up (fades to 0 at a crawl)
+SLIDE_DRAG: 0.03                // decel sliding fully sideways
 MAX_STEER_ANGLE: 0.42
-STEER_SPEED: 0.04               // v10: was 0.055
+STEER_SPEED: 0.04
 STEER_RETURN_SPEED: 0.08
 MIN_SPEED_TO_TURN: 0.15         // steering only works while moving
 SLIDE_FRICTION: 0.85
 ANGULAR_FRICTION: 0.82
-MUD_GRIP: 0.11                  // v10: travel direction chases heading at this rate/frame
+MUD_GRIP: 0.11                  // travel direction chases heading at this rate/step (below the grip cap)
 GRIP_LOSS_AT_TOP_SPEED: 0.45
 GRIP_LOSS_FROM_DAMAGE: 0.4
-SLIDE_SCRUB: 0.05
-DAMAGE_PULL_MAX: 0.07           // v10: steering pull (rad) at 100% front damage
+DAMAGE_PULL_MAX: 0.07           // steering pull (rad) at 100% front damage
 DAMAGE_WOBBLE_MAX: 0.08
 RESTITUTION: 0.35
 COLLISION_BIAS: 0.3
 ANGULAR_IMPULSE_SCALE: 0.012
-CONTACT_TIMEOUT: 30 * 60        // 30 s to initiate a hit (v10.5; was 45 s, any contact)
+CONTACT_TIMEOUT: 30 * 60        // 30 s to initiate a hit
+CONTACT_INITIATE_SPEED: 0.45    // approach speed needed for hit credit (~4 mph)
 CAR_SCALE: 1.2
+DAMAGE: { HIT_AT_TOP_SPEED: 260, MAX_ENERGY: 0.7, WALL_FACTOR: 0.3 }
+CAR_LIFE: { FRONT: 2.2, SIDE: 2.8, REAR: 3.0 }
 ```
 
-Tuned outside `PHYSICS` (in code, with history comments):
+Tuned outside config (in code, with history comments):
 
-- Post-impact velocity decay: `0.75` per frame (`physics.js`). Was 0.94, then 0.85.
-- Speed-bonus damage: `pow(speed - 2, 1.9) * 5` (`collision.js`), on the old top-speed-9 scale: all damage and crash-sound speeds are multiplied by `DAMAGE_SPEED_SCALE = 9 / MAX_FORWARD_SPEED` so a full-speed hit still does what it did at top speed 9. Measured: 90%-speed rear ram into a door = 165 side damage.
-- Wall damage: `impactSpeed * 3 * zoneMultiplier`, where impactSpeed is the velocity component into the wall (drive + slide + knockback) (`physics.js`, `WALL_DAMAGE_PER_SPEED`). The zone is the part of the car that hits the wall (front 1.4×, side 0.8×, rear 0.5×, divided by model strength), not which wall was hit.
+- Post-impact knockback decay: `0.75` per step (`physics.js`). Was 0.94, then 0.85.
+- `DAMAGE_SPEED_SCALE = 9 / MAX_FORWARD_SPEED` now only scales crash-sound and scrape loudness.
+
+## How to test (no test suite; these are the checks that caught real bugs)
+
+All run in headless Chromium via Playwright against `index.html`.
+- **Fast round simulation:** replace `requestAnimationFrame` with a no-op in an init script, build a field with `placeField`, give the player's car an `ai` object and wrap `updateCarPhysics` so `updateAI` drives it, then call `updateGame()` in a loop. A 3-minute 12-car round runs in under a second. Measure: seconds until 6 are left, wrecks vs clock disqualifications, and whether disqualified cars were crippled (`getSteerModifier` < 0.35 or `getAccelerationModifier` < 0.45) or healthy. Healthy disqualifications mean an AI bug.
+- **Handling numbers:** one car in open space, stepped with `updateCarPhysics`: time/distance to 50% and 90% speed, braking and coasting distance from top speed, degrees the path turns in 1 s at full lock, U-turn width. Report them to Joe in seconds, px, car lengths and mph.
+- **AI aim test:** one AI car and one parked target for 60 s, 12 seeds, for both `preferReverse` values: every trial must land hits.
+- **Refresh-rate test:** drive `requestAnimationFrame` callbacks by hand at 30/60/120/144 Hz and confirm the countdown takes 6 s and the same distance is covered.
+- After any physics change, also run a damaged car (accel modifier at its floor) on full lock and confirm it can still pull away.
 
 ## Car roster (v10.1)
 
@@ -145,6 +169,7 @@ If you add a new module, append a `<script src="js/your-module.js"></script>` li
 - ~~Mild weather~~ — shipped v10.3
 - ~~Power-ups~~ — rejected by Joe: no in-event advantages or track pickups
 - ~~Online leaderboards~~ — not wanted for now
+- Proposed to Joe in v11, awaiting his call: (a) driver's-door rule (real derbies ban hits on the driver's door); (b) score only for hits the player lands (today every elimination pays the player, whoever caused it); (c) recorded crash/engine sounds if the synthesized ones still sound fake; (d) remove floating damage numbers / health bars for a more serious look; (e) pause key.
 
 ## How Joe works
 

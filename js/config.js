@@ -6,26 +6,49 @@ const CAR_SCALE = 1.2; // 20% larger cars
 // Derby rule: every car must INITIATE contact with a live car within this
 // time or it's out. Taking a hit doesn't reset it (see resolveCollision).
 const CONTACT_TIMEOUT = 30 * 60; // 30 seconds at 60fps (was 45 and any contact counted)
-const CONTACT_INITIATE_SPEED = 0.6; // must be driving into the other car at least this fast (top speed 5.4)
+const CONTACT_INITIATE_SPEED = 0.45; // must be driving into the other car at least this fast (about 4 mph at scale)
+
+// Real-world scale: the Crown Vic is 212 in long and drawn 76.3 px long,
+// so 1 ft = 4.32 px and 1 mph = 0.1056 px per 1/60 s step. Use these to
+// reason about tuning in units Joe can check against a real derby.
+const PX_PER_FOOT = 4.32;
+const SPEED_PER_MPH = 0.1056;
 
 const PHYSICS = {
-  BASE_ACCELERATION: 0.05,  // v10.6: was 0.08 (Joe: accelerating too fast)
-  MAX_FORWARD_SPEED: 5.4,  // v10.7: -10% (Joe). Was 9 -> 6 in v10
-  MAX_REVERSE_SPEED: 5.4,  // Same as forward when healthy
-  // Off the throttle in mud (v10.6): v = v * COAST_DRAG - COAST_DECEL.
-  // Was a flat 5.9%/frame loss, which stopped a coasting car faster than
-  // braking did.
-  COAST_DRAG: 0.99,
-  COAST_DECEL: 0.025,
-  // Braking in mud (v10.6): wheels lock and the car slides. Was 2.5x the
-  // acceleration (0.2/frame), a near-instant stop.
-  BRAKE_DECEL: 0.09,
+  // v11 mud retune (Joe: top speed and acceleration too fast, stopping
+  // too easy, turning at speed too precise). History: top speed 9 -> 6 ->
+  // 5.4 -> 4.0; acceleration 0.04 -> 0.08 -> 0.05 -> 0.03 with taper.
+  MAX_FORWARD_SPEED: 4.0,   // ~38 mph at scale (was 5.4, ~51 mph)
+  MAX_REVERSE_SPEED: 4.0,   // Same as forward when healthy
+  BASE_ACCELERATION: 0.03,  // drive at a standstill, before wheelspin
+  // Pull fades as the car gains speed (0.7 = 30% of launch pull left at top
+  // speed), so the last part of the climb to top speed takes a while.
+  ACCEL_TAPER: 0.7,
+  // Off the throttle in mud: v = v * COAST_DRAG - COAST_DECEL per step
+  // (about 4 s and 5 car lengths to roll to a stop from top speed)
+  COAST_DRAG: 0.998,
+  COAST_DECEL: 0.014,
+  // Braking in mud: wheels lock and the car slides. Added on top of the
+  // coasting drag: about 2.3 s and 3.5 car lengths from top speed.
+  // Was 0.09 flat (2.3 g at scale, a 1 s stop).
+  BRAKE_DECEL: 0.011,
   LOCKED_STEER: 0.35,   // steering authority with the wheels locked
-  LOCKED_GRIP: 0.4,     // travel direction follows the nose this much less while sliding
-  // Wheelspin (v10.6): pulling away from rest or changing direction starts
-  // with the tires spinning in the mud; traction builds as they bite.
+  LOCKED_GRIP: 0.4,     // sideways grip left while sliding on locked wheels
+  // Wheelspin: pulling away from rest or changing direction starts with
+  // the tires spinning in the mud; traction builds as they bite.
   WHEELSPIN_LAUNCH: 0.7,     // fraction of drive lost at the moment of launch
-  WHEELSPIN_RECOVERY: 0.016, // per frame (~0.75 s to full traction)
+  WHEELSPIN_RECOVERY: 0.012, // per step (~1 s to full traction)
+  // Sideways grip (v11). The mud can only bend the car's path this hard
+  // (px/step^2), so the tightest turn widens with the square of speed:
+  // full steering up to ~55% of top speed, then the car plows wide.
+  // Above that the nose can still swing up to YAW_OVER_GRIP times faster
+  // than the path, which is the slide.
+  LATERAL_GRIP: 0.05,
+  YAW_OVER_GRIP: 1.35,
+  // Speed scrubbed off by cornering (px/step^2, not a percentage, so a
+  // hard turn can't out-brake the brakes)
+  TURN_DRAG: 0.012,     // at full lock, from half speed up (fades to nothing at a crawl)
+  SLIDE_DRAG: 0.03,     // sliding fully sideways
   MAX_STEER_ANGLE: 0.42,
   STEER_SPEED: 0.04,     // v10: was 0.055 — wheel turns in slower, less twitchy
   STEER_RETURN_SPEED: 0.08,
@@ -38,7 +61,6 @@ const PHYSICS = {
   MUD_GRIP: 0.11,
   GRIP_LOSS_AT_TOP_SPEED: 0.45,  // grip × (1 - this) at full speed
   GRIP_LOSS_FROM_DAMAGE: 0.4,    // grip × (1 - this) when front/side fully damaged
-  SLIDE_SCRUB: 0.05,             // speed lost per frame while sliding fully sideways
   // Bent steering (v10): front damage pulls the car toward the side that
   // took the hit and adds play/wobble to the wheel.
   DAMAGE_PULL_MAX: 0.07,         // radians of steering pull at 100% front damage
@@ -49,20 +71,36 @@ const PHYSICS = {
   ANGULAR_IMPULSE_SCALE: 0.012
 };
 
-// Damage and crash-sound formulas were tuned when top speed was 9. This
-// maps current speeds onto that scale so a full-speed hit at the new top
-// speed hurts as much as a full-speed hit did before.
+// Crash-sound and scrape levels were tuned when top speed was 9; this maps
+// current speeds onto that scale.
 const DAMAGE_SPEED_SCALE = 9 / PHYSICS.MAX_FORWARD_SPEED;
 
+// Damage (v11). A hit's energy goes with the square of the closing speed
+// at the point of contact, and BOTH cars take it, each scaled by the zone
+// of its own car that made contact (front 1.4, side 0.8, rear 0.5, over
+// model strength). So ramming tail-first costs you 0.5 while the door you
+// hit takes 0.8 and an engine you hit takes 1.4; ramming nose-first costs
+// you 1.4. That trade is the game: ram with the rear, protect the engine.
+// (Before v11 the rammer took almost nothing either way, and damage came
+// from a speed bonus that mud-speed hits rarely reached.)
+const DAMAGE = {
+  HIT_AT_TOP_SPEED: 260, // energy of a hit at a closing speed equal to top speed
+  // Cap on one hit, as a multiple of the above. Head-ons close at up to
+  // twice top speed; uncapped, one of them took 42% of a car's life. With
+  // the cap the worst single hit is 29% of life (to the engine), 14% to a
+  // door, 9% to the tail.
+  MAX_ENERGY: 0.7,
+  WALL_FACTOR: 0.3       // a wall hit costs this share of the same hit on a car
+};
+
 // How much punishment a car takes before it is out, as multiples of each
-// zone's pool (see getLifeUsed in car.js). Zones max out their handling
-// and visual damage at 1×; the car keeps running until the combined wear
-// across zones reaches 1. Measured at 75% ramming speed: about 6 front
-// hits, 10 side hits or 14 rear hits (mixed hits add up).
+// zone's pool (see getLifeUsed in car.js). A zone's handling and visual
+// damage max out at 1x; the car keeps limping until the combined wear
+// across zones reaches 1.
 const CAR_LIFE = {
-  FRONT: 3.5,
-  SIDE: 4.5,
-  REAR: 4
+  FRONT: 2.2,
+  SIDE: 2.8,
+  REAR: 3.0
 };
 
 // Per-model color palettes — each model gets a restricted HSL range that

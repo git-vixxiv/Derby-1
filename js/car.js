@@ -240,7 +240,10 @@ function getAccelerationModifier(car) {
   const rearPenalty = getRearDamagePct(car) * 0.6;
   const frontPenalty = getFrontDamagePct(car) * 0.3;
   const sidePenalty = getSideDamagePct(car) * 0.15;
-  return Math.max(0.2, 1 - rearPenalty - frontPenalty - sidePenalty);
+  // Floor raised 0.2 -> 0.35 in v11 along with the lower base acceleration,
+  // so a crippled car crawls about as it did before (it still has to be
+  // able to get moving to make a hit inside the 30 s clock)
+  return Math.max(0.35, 1 - rearPenalty - frontPenalty - sidePenalty);
 }
 
 function getSteerModifier(car) {
