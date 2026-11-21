@@ -25,7 +25,9 @@ Modular build:
 - `css/styles.css`
 - `js/config.js` — ARENA_*, WALL_THICKNESS, CAR_SCALE, CONTACT_TIMEOUT, PHYSICS, CAR_TYPES
 - `js/math.js` — vector math, hsl, dist, normAngle, clamp, formatTime, getUniqueNumber/Color
-- `js/audio.js` — master bus + compressor, V8 engine loop (player + field), layered crash buffers, metal scrape, mute toggle
+- `js/audio.js` — master bus + compressor, recorded sounds loaded from `sounds/` (engine loop, layered crashes) with the synthesized versions as fallback, metal scrape, mute toggle
+- `sounds/` — recorded sound files + `README.md` (what each is, how to replace) + `CREDITS.md`; `sound-test.html` at the root auditions them
+- `images/` — `splash.jpg` (title-screen art, **not yet supplied by Joe**; gradient shows until it is) + `README.md`
 - `js/car.js` — geometry, createCar, damage % helpers, modifiers (speed/accel/steer)
 - `js/collision.js` — SAT detection, OBB checks, resolveCollision, applyDamage, getZoneDamageMultiplier, spawnDamagePopup
 - `js/physics.js` — updateCarPhysics
@@ -39,7 +41,7 @@ Modular build:
 - `js/championship.js` — tournament flow, simulated field damage, round-end overlays
 - `js/game.js` — initGame (Quick Derby field), placeField (any field, keeps damage), generateStartPositions, startGame, nextLevel, startCountdown
 - `js/mobile.js` — tilt + touch-pad steering, permission, steering setting, fullscreen
-- `js/main.js` — global state, controls, fixed-timestep gameLoop (`updateGame` = one 1/60 s step with no drawing, `renderGame`), event listeners, bootstrap
+- `js/main.js` — global state, controls, fixed-timestep gameLoop (`updateGame` = one 1/60 s step with no drawing, `renderGame`), pause, flagman announcements, `retireCar`, event listeners, bootstrap
 
 All JS uses classic `<script>` tags loaded in dependency order — no build step, no ES modules. Functions and `let`/`const` declarations remain global so inline `onclick="startGame()"` handlers in `index.html` continue to work. Open `index.html` directly in a browser, or use `python -m http.server` to avoid file:// quirks. Deployed and playable.
 
@@ -60,14 +62,16 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Per-zone damage (front/side/rear) with separate HP pools. Two measures: **condition** (zone damage ÷ pool, capped at 100%) drives visuals and handling — front kills steering (to 5–15%) and some power, rear kills speed/acceleration, side a bit of both. **Life** (`getLifeUsed`) keeps counting past 100%: out when front/(pool×2.2) + side/(pool×2.8) + rear/(pool×3.0) ≥ 1 (`CAR_LIFE` in config; lowered in v11 together with the new damage model). Acceleration never drops below 35% (was 20%) so a crippled car can still crawl to a hit. Health bar above cars shows life; HUD zone bars show condition. Fire only when life < 25%.
 - Visual damage accumulation — per-car deformation profile (`car.deform`): body outline caves in where hit, persistent creases, buckled hood, broken lamps, bent bumpers, grime; plus scratches/dents in car-local space
 - Particle systems: sparks, debris, paint chips, smoke, fire
-- Synthesized audio (no files): 12 pre-rendered crash buffers (3 weight classes × 4 variations) built from noise only — body thud, broadband crunch, crunch driven through a resonant filter bank for the steel-panel clang, debris ticks, hard saturation. Stereo-panned, volume scales with impact. Metal scrape loop for sustained contact. V8 engine loop of unpitched exhaust pops (pitch comes from firing rate only), rev at the line during countdown, muffled field-engine bed. Master compressor. `M` to mute (localStorage key `demolitionDerbyMuted`). **Avoid short tonal components** (damped sines, pitch sweeps): Joe heard them as water splashes and a horn.
+- **Audio (v11.1): recordings first, synthesis as fallback.** Joe judged both synthesized attempts fake. `SOUND_FILES` in `audio.js` lists files in `sounds/` per slot (engine / thud / hit / debris / glass); any slot that loads replaces the synthesized sound. Crashes are layered: light = one `hit`; medium adds `thud` and delayed `debris`; heavy adds a second `hit` and `glass`, all pitched lower. Engine: one recorded idle loop pitched 0.85×–2× with revs (a recording can't be pitched as far as the synth). Current files are CC0 from OpenGameArt (see `sounds/CREDITS.md`) and are foley and a phone-recorded idle, **not real derby recordings; awaiting Joe's verdict via `sound-test.html`**. Claude cannot hear: never claim a sound is good, measure what can be measured and let Joe judge. Recordings only load over http(s), so `file://` runs use the synth. Synth notes: avoid short tonal components (Joe heard them as water splashes and a horn). `M` mutes (localStorage `demolitionDerbyMuted`).
 - AI opponents (`js/ai.js`, rewritten v11). Each driver picks a live car and which end to ram with (everyone leans toward the tail; more so with engine damage), drives at it leading its motion, slows down for corrections the mud won't allow at speed, brakes for walls using its real stopping distance, goes round wrecks, backs off 130–290 px for a run-up after each hit, and K-turns away from a wall instead of pushing into it. No bias toward the player (the old +80 targeting bonus is gone: Joe's no-advantage rule). **v11 fixed the old AI steering backwards in reverse: tail-first rammers (55% of the field) landed 0 hits/min; all drivers now land ~9/min on a parked car.** Known weak spot: Figure 8, where ~1.5 healthy cars per round still time out behind the islands.
 - Round pacing with 12 AI cars (measured, fast sim): heat (6 left) ≈ 107 s Fairgrounds / 116 s Oval / 92 s Figure 8; last car standing ≈ 175 s. First car out typically 20–40 s. About 60% of eliminations are wrecks and 40% are crippled cars timed out by the hit clock, none healthy on Fairgrounds/Oval.
 - **30-second hit rule** (Joe, v10.5): every car must *initiate* contact with a live car within 30 s or it's out. Only the car driving into the other gets credit; taking a hit doesn't reset the clock, and hitting a dead car doesn't count. Head-ons credit both. HUD shows the player's hit clock at all times (gray → orange ≤15 s → red ≤5 s). Approach speed threshold is `CONTACT_INITIATE_SPEED` 0.45 since v11. AI drops everything to go hit someone at 40% of the clock (12 s).
 - Cars start around arena perimeter facing outward (authentic derby start)
 - Keyboard controls (desktop). Phones (`js/mobile.js`): **tilt steering** (hold the phone like a wheel; gravity direction in the screen plane vs. a neutral captured during the countdown; 30° = full lock, 2° deadzone; orientation-independent and iPhone/Android sign-agnostic; iPhone needs a tap + permission prompt, requested from the Start buttons or the Steering menu setting) or a **drag-to-steer touch pad** (70 px = full lock). Both are analog: `updateCarPhysics(..., analogSteer)` moves the wheel toward the target at the normal steer rate. Landscape layout: arena full height center, REV left / GAS right (tilt) or pad left / REV+GAS right (touch). Portrait: steering area + REV + GAS under the arena. Menus go fullscreen and scroll on phones. Android goes fullscreen on Start.
-- Health bars above active cars
-- Floating damage popup numbers
+- **No score, no health bars, no damage numbers (Joe, v11.1): survival only.** A car's state shows in its bodywork, smoke and fire. The player's own status is on the HUD: FRONT / SIDE / REAR condition bars plus "LEFT IN THE CAR" (life). A small orange marker sits over the player's car. A flagman line at the top of the arena calls who is out and why, and door warnings (`announce`). End screens show placing ("finished 4th of 11") and time lasted.
+- **Driver's-door rule (v11.1).** The driver's door (left side of the cabin, painted white, or orange on light cars) must not be hit. A door hit never counts toward the hit clock. One harder than `DOOR_RULE.MIN_CLOSING` (0.2 of top speed) is called against the car that drove into it: first is a warning, second puts that car out (`HITS_ALLOWED: 2`, per round). Same for the player and the AI; AI drivers aim for the fender or rear quarter when coming at a car's left side and draw ~1–3 warnings per round, with ~0.2 cars per round flagged out.
+- Pause: `P` or `Esc`, the II button on the HUD, or automatically when the tab is hidden. Resume or quit to menu.
+- Title screen styled after Joe's mockup: full-window splash, riveted metal menu panel left, how-to-play clipboard right, real buttons on top of `images/splash.jpg`.
 - **No power-ups or track pickups.** Joe's rule: nothing may hand out an advantage or disadvantage during an event (removed v10.2).
 - Garage (`js/garage.js`): player picks model, paint (16), number color (8) and number (00–99). Saved in localStorage (`demolitionDerbyCarV1`) and used for every event until changed. First visit routes through the garage.
 - Championship (`js/championship.js`): 12-car heat → last 6 running advance (50%, Joe v10.4) → semi-final (your 6 + 6 from a simulated heat, carrying simulated damage) → last 6 advance → final (your 6 + 6 from a simulated semi) → last car running wins. No repairs between rounds. Elimination shows placement.
@@ -75,7 +79,6 @@ All JS uses classic `<script>` tags loaded in dependency order — no build step
 - Arenas (`js/arena.js`): County Fairgrounds (original rectangle), Speedway Oval, Figure 8 (two loops, tire-ringed grass islands, crossover in the middle). Menu picker, or random each round. Walls are generic polygons + round obstacles; AI avoids walls with look-ahead probes. Mud tracks are visual only.
 - Weather (`js/weather.js`): Clear / Overcast / Light rain (−8% grip, same for every car), menu picker or random. Default Clear.
 - Per-model car stats (weight, acceleration, top speed, front/rear strength) — first pass, see roster below
-- High score persistence via localStorage (key: `demolitionDerbyHighScoreV9`)
 
 ## Physics constants — current tuning (v11)
 
@@ -115,6 +118,7 @@ CONTACT_TIMEOUT: 30 * 60        // 30 s to initiate a hit
 CONTACT_INITIATE_SPEED: 0.45    // approach speed needed for hit credit (~4 mph)
 CAR_SCALE: 1.2
 DAMAGE: { HIT_AT_TOP_SPEED: 260, MAX_ENERGY: 0.7, WALL_FACTOR: 0.3 }
+DOOR_RULE: { HITS_ALLOWED: 2, MIN_CLOSING: 0.2, LENGTH: 17, FROM_WINDSHIELD: 5 }
 CAR_LIFE: { FRONT: 2.2, SIDE: 2.8, REAR: 3.0 }
 ```
 
@@ -169,7 +173,8 @@ If you add a new module, append a `<script src="js/your-module.js"></script>` li
 - ~~Mild weather~~ — shipped v10.3
 - ~~Power-ups~~ — rejected by Joe: no in-event advantages or track pickups
 - ~~Online leaderboards~~ — not wanted for now
-- Proposed to Joe in v11, awaiting his call: (a) driver's-door rule (real derbies ban hits on the driver's door); (b) score only for hits the player lands (today every elimination pays the player, whoever caused it); (c) recorded crash/engine sounds if the synthesized ones still sound fake; (d) remove floating damage numbers / health bars for a more serious look; (e) pause key.
+- v11.1 shipped Joe's calls: driver's-door rule, no scoring, recorded sounds, no damage numbers or health bars, pause.
+- Waiting on Joe: clean splash art (`images/splash.jpg`, scene only, no text or panels); his verdict on each recorded sound; better recordings if he can get real derby audio (see `sounds/README.md`).
 
 ## How Joe works
 

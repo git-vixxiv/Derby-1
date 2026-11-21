@@ -40,6 +40,8 @@ function placeField(cars) {
     car.steerAngle = 0;
     car.lastContactFrame = 0;
     car.lastHitFlash = -1000;
+    car.doorFlags = 0;       // driver's-door hits called on this car this round
+    car.lastDoorFlag = -1000;
     if (car.ai) {
       car.ai.state = 'scanning';
       car.ai.stateTimer = 0;
@@ -56,12 +58,10 @@ function placeField(cars) {
   disabledCars = [];
   particles = [];
   mudTracks = [];
-  damagePopups = [];
-  carsWrecked = 0;
+  announcements = [];
 
   document.getElementById('player-number').textContent = player.carNumber.toString().padStart(2, '0');
   document.getElementById('player-model').textContent = '(' + player.carType.name + ' ' + player.carType.era + ' — ' + player.carType.trait + ')';
-  document.getElementById('disqualified-msg').style.display = 'none';
 }
 
 function generateStartPositions(count) {
@@ -75,7 +75,6 @@ function startGame() {
     initAudio(); // Initialize sound on first user interaction
     gameMode = 'quick';
     level = 1;
-    score = 0;
     initGame(1);
     startCountdown();
   });

@@ -25,7 +25,6 @@ function startChampionship() {
     gameMode = 'championship';
     champStage = 0;
     level = 1;
-    score = 0;
     usedNumbers.clear();
     const cars = [createCar(0, 0, 0, true)];
     for (let i = 1; i < CHAMP_FIELD_SIZE; i++) cars.push(createChampCar(i));
@@ -56,7 +55,7 @@ function checkChampionshipRound() {
     endRoundUI('champover');
     const place = running.length + 1;
     const stage = CHAMP_STAGES[champStage].name;
-    const why = playerDisqualified ? 'Disqualified: you didn\'t hit anyone for 30 seconds.' : 'Your car is finished.';
+    const why = describePlayerOut().why;
     setTimeout(() => showChampOverlay(
       'ELIMINATED',
       '#e74c3c',
@@ -85,7 +84,7 @@ function checkChampionshipRound() {
     showChampOverlay(
       'CHAMPION!',
       '#f5a623',
-      `Last car running out of ${CHAMP_FIELD_SIZE * (CHAMP_OTHER_GROUPS + 1) ** 2} entries.<br>Score: ${score}`,
+      `Last car running out of ${CHAMP_FIELD_SIZE * (CHAMP_OTHER_GROUPS + 1) ** 2} entries.`,
       [['NEW CHAMPIONSHIP', 'startChampionship()', 'btn-green'], ['MENU', 'backToMenu()', 'btn-grey']]
     );
   }
@@ -135,11 +134,6 @@ function simulateRoundDamage(car, rounds) {
 function endRoundUI(state) {
   gameState = state;
   muteEngine();
-  if (score > highScore) {
-    highScore = score;
-    try { localStorage.setItem('demolitionDerbyHighScoreV9', highScore); } catch (e) {}
-    updateHighScoreDisplay();
-  }
   document.getElementById('hud-panel').classList.remove('active');
   document.getElementById('touch-controls').classList.remove('active');
   document.getElementById('keyboard-hint').classList.remove('active');

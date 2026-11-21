@@ -184,7 +184,7 @@ function drawGaragePreview() {
 function updateMenuCarLine() {
   const el = document.getElementById('menu-car-line');
   if (!el) return;
-  if (!playerCarSaved) { el.textContent = ''; return; }
+  if (!playerCarSaved) { el.textContent = 'Your car: build it in the garage'; return; }
   const t = CAR_TYPES[playerCar.model];
   el.textContent = `Your car: #${playerCar.number.toString().padStart(2, '0')} ${PAINT_COLORS[playerCar.paint].name} ${t.name} ${t.era}`;
 }

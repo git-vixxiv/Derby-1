@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demolition Derby: sound test</title>
+  <style>
+    body { background: #111; color: #ddd; font-family: 'Segoe UI', Arial, sans-serif; max-width: 760px; margin: 0 auto; padding: 16px; line-height: 1.5; }
+    h1 { color: #f5a623; font-size: 22px; }
+    h2 { font-size: 16px; margin: 22px 0 6px; color: #fff; }
+    p { color: #aaa; font-size: 14px; margin: 4px 0 8px; }
+    button { background: #333; color: #fff; border: 1px solid #666; border-radius: 6px; padding: 10px 14px; margin: 3px; font-size: 14px; cursor: pointer; }
+    button:hover { background: #444; }
+    button.big { background: #8a3324; border-color: #c0392b; font-weight: bold; }
+    #status { color: #2ecc71; font-size: 13px; }
+    input[type=range] { width: 100%; }
+    label { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Demolition Derby: sound test</h1>
+  <p>Tap a button to hear a sound exactly as the game plays it. Tell Claude which ones sound wrong by name (for example "hit_3 sounds like a tin can").</p>
+  <button class="big" id="start">START SOUND</button> <span id="status"></span>
+
+  <h2>Crashes, as the game builds them</h2>
+  <p>Each press picks different files at random, so press a few times.</p>
+  <div>
+    <button onclick="crash(1.5)">Light bump</button>
+    <button onclick="crash(4)">Medium hit</button>
+    <button onclick="crash(6.5)">Hard hit</button>
+    <button onclick="crash(9)">Biggest hit</button>
+  </div>
+
+  <h2>Engine</h2>
+  <p>Drag for speed. Tick the box to hold the gas.</p>
+  <label><input type="checkbox" id="gas"> Gas pedal down</label>
+  <input type="range" id="speed" min="0" max="100" value="0">
+  <div><button onclick="engineOff()">Engine off</button></div>
+
+  <h2>Every recorded file on its own</h2>
+  <div id="files"></div>
+
+  <h2>The old synthesized sounds, for comparison</h2>
+  <div>
+    <button onclick="synth('light')">Synth light</button>
+    <button onclick="synth('medium')">Synth medium</button>
+    <button onclick="synth('heavy')">Synth heavy</button>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/math.js"></script>
+  <script src="js/audio.js"></script>
+  <script>
+    let engineOn = false;
+    const status = document.getElementById('status');
+    document.getElementById('start').onclick = () => {
+      initAudio();
+      status.textContent = 'Loading recordings…';
+      const wait = setInterval(() => {
+        const n = Object.values(soundBank).reduce((s, a) => s + a.length, 0);
+        const total = Object.values(SOUND_FILES).reduce((s, a) => s + a.length, 0);
+        status.textContent = `Sound on. ${n} of ${total} recordings loaded.`;
+        if (n === total) { clearInterval(wait); listFiles(); }
+      }, 300);
+      setTimeout(() => { clearInterval(wait); listFiles(); }, 6000);
+    };
+    function need() { if (!audioCtx) { status.textContent = 'Press START SOUND first.'; return false; } return true; }
+    function crash(intensity) { if (need()) playCrashSound(intensity, 400); }
+    function synth(tier) { if (need()) { const p = crashBuffers[tier]; playBuffer(p[Math.floor(Math.random() * p.length)], 0.7, 1, 0, 0); } }
+    function listFiles() {
+      const box = document.getElementById('files');
+      box.innerHTML = '';
+      for (const slot of Object.keys(soundBank)) for (const buf of soundBank[slot]) {
+        if (slot === 'engine') continue;
+        const b = document.createElement('button');
+        b.textContent = buf.fileName.replace(/\.\w+$/, '');
+        b.onclick = () => playBuffer(buf, 0.8, 1, 0, 0);
+        box.appendChild(b);
+      }
+    }
+    function engineOff() { engineOn = false; if (audioCtx) muteEngine(); }
+    const speed = document.getElementById('speed'), gas = document.getElementById('gas');
+    const drive = () => { if (!need()) return; engineOn = true; };
+    speed.oninput = drive; gas.onchange = drive;
+    setInterval(() => { if (engineOn && audioCtx) updateEngineSound(speed.value / 100 * PHYSICS.MAX_FORWARD_SPEED, gas.checked); }, 50);
+  </script>
+</body>
+</html>

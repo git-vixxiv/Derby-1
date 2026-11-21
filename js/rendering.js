@@ -41,45 +41,37 @@ function drawPlayerHighlight(car) {
   ctx.restore();
 }
 
-function drawHealthBar(car) {
-  const dim = getCarDimensions(car);
-  const halfLen = dim.length / 2;
-  const healthPct = getCarHealthPct(car);
+// A small marker above the player's own car
+function drawPlayerMarker(car) {
+  const y = car.y - getCarDimensions(car).length / 2 - 12;
+  ctx.fillStyle = '#f5a623';
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(car.x - 7, y - 9);
+  ctx.lineTo(car.x + 7, y - 9);
+  ctx.lineTo(car.x, y);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+}
 
-  const barWidth = 44;
-  const barHeight = 6;
-  const barX = car.x - barWidth / 2;
-  const barY = car.y - halfLen - 20;
-
-  // Background (dark)
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
-
-  // Health fill - color based on health level
-  let barColor;
-  if (healthPct > 0.6) {
-    barColor = '#2ecc71'; // Green
-  } else if (healthPct > 0.35) {
-    barColor = '#f39c12'; // Yellow/orange
-  } else {
-    barColor = '#e74c3c'; // Red
-  }
-
-  ctx.fillStyle = barColor;
-  ctx.fillRect(barX, barY, barWidth * healthPct, barHeight);
-
-  // Border
-  ctx.strokeStyle = car.isPlayer ? '#fff' : '#888';
-  ctx.lineWidth = car.isPlayer ? 2 : 1;
-  ctx.strokeRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
-
-  // Player indicator (small crown/star above bar)
-  if (car.isPlayer) {
-    ctx.fillStyle = '#f5a623';
-    ctx.font = 'bold 10px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('★', car.x, barY - 4);
-  }
+// The flagman's calls, newest at the bottom, fading out
+function drawAnnouncements() {
+  ctx.save();
+  ctx.font = 'bold 15px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  announcements.forEach((a, i) => {
+    ctx.globalAlpha = Math.min(1, a.life / 40);
+    const y = 18 + i * 20;
+    const w = ctx.measureText(a.text).width + 20;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(ARENA_WIDTH / 2 - w / 2, y - 10, w, 20);
+    ctx.fillStyle = a.color;
+    ctx.fillText(a.text, ARENA_WIDTH / 2, y);
+  });
+  ctx.restore();
 }
 
 function drawCar(car) {
@@ -332,6 +324,16 @@ function drawCar(car) {
     ctx.moveTo(wx0, -hw + band); ctx.lineTo(wx1, -hw + band);
     ctx.moveTo(wx0, hw - band); ctx.lineTo(wx1, hw - band);
     ctx.stroke();
+  }
+
+  // Driver's door, painted so everyone can see where not to hit (derby
+  // rules require it). White, or orange on a light car.
+  {
+    const door = getDoorSpan(car);
+    ctx.fillStyle = car.disabled ? 'rgba(150,150,150,0.5)' : (lightPaint ? '#ff7a00' : '#f4f4f4');
+    ctx.fillRect(door.rear, -hw, door.front - door.rear, 3.2 * S);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(door.rear, -hw + 3.2 * S, door.front - door.rear, 0.6);
   }
 
   // Stand-up hood ornament (Lincoln star / Cadillac wreath)

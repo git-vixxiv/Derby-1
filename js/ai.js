@@ -83,10 +83,23 @@ function updateAI(car) {
   const eta = Math.min(45, distToTarget / Math.max(absV, 1.2));
   const aimX = target.x + (Math.cos(tAngle) * target.speed + (target.vx || 0)) * eta * 0.6;
   const aimY = target.y + (Math.sin(tAngle) * target.speed + (target.vy || 0)) * eta * 0.6;
-  let angleToAim = Math.atan2(aimY - car.y, aimX - car.x);
+  // Driver's-door rule: coming at the target's left side, aim for the
+  // fender or the rear quarter, whichever is nearer, never the door
+  let aimPX = aimX, aimPY = aimY;
+  {
+    const rel = vecRotate(vec(car.x - target.x, car.y - target.y), -target.angle);
+    const door = getDoorSpan(target);
+    if (rel.y < -door.halfWidth && rel.x < target.carType.length * 0.75 && rel.x > -target.carType.length * 0.75) {
+      const end = rel.x >= (door.front + door.rear) / 2 ? 1 : -1;
+      const off = end * target.carType.length * 0.5;
+      aimPX += Math.cos(target.angle) * off;
+      aimPY += Math.sin(target.angle) * off;
+    }
+  }
+  let angleToAim = Math.atan2(aimPY - car.y, aimPX - car.x);
   // A wreck in the way: go round it. (Wrecks pile up as the round goes on,
   // and hitting one doesn't count as a hit.)
-  const wreck = ai.state === 'attacking' ? aiWreckInPath(car, aimX, aimY, 260) : null;
+  const wreck = ai.state === 'attacking' ? aiWreckInPath(car, aimPX, aimPY, 260) : null;
   if (wreck) {
     const pass = wreck.side > 0 ? -1 : 1; // pass on the side the wreck isn't leaning toward
     for (const side of [pass, -pass]) {
@@ -94,7 +107,7 @@ function updateAI(car) {
       if (arenaClearance(wx, wy) > 30) { angleToAim = Math.atan2(wy - car.y, wx - car.x); break; }
     }
   }
-  const distToAim = Math.hypot(aimX - car.x, aimY - car.y);
+  const distToAim = Math.hypot(aimPX - car.x, aimPY - car.y);
   // How far the ramming end is from pointing at the aim point
   const diff = normAngle((ai.useRear ? angleToAim + Math.PI : angleToAim) - car.angle);
   const misalign = Math.abs(diff);

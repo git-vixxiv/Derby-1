@@ -3,10 +3,7 @@ let gameState = 'menu';
 let countdownValue = 5;
 let countdownTimer = 0;
 let level = 1;
-let score = 0;
-let carsWrecked = 0;
 let roundStartTime = 0;
-let highScore = parseInt(localStorage.getItem('demolitionDerbyHighScoreV9')) || 0;
 let playerDisqualified = false;
 
 let player = null;
@@ -15,7 +12,7 @@ let allCars = [];
 let disabledCars = [];
 let particles = [];
 let mudTracks = [];
-let damagePopups = []; // Floating damage numbers
+let announcements = []; // Flagman's calls shown at the top of the arena
 let usedNumbers = new Set();
 
 const controls = { left: false, right: false, gas: false, reverse: false, analogSteer: null };
@@ -29,7 +26,6 @@ const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
 let frameCount = 0;
 
-updateHighScoreDisplay();
 updateMenuCarLine();
 updateMenuSettings();
 setupMobile();
@@ -79,6 +75,64 @@ function gameLoop(now) {
   else if (ran === 'playing') renderGame();
 }
 
+// ==================== PAUSE ====================
+function togglePause() {
+  if (gameState === 'playing') {
+    gameState = 'paused';
+    muteEngine();
+    showOverlay('pause');
+  } else if (gameState === 'paused') {
+    gameState = 'playing';
+    showOverlay('none');
+  }
+}
+
+function quitToMenu() {
+  document.getElementById('hud-panel').classList.remove('active');
+  document.getElementById('touch-controls').classList.remove('active');
+  document.getElementById('keyboard-hint').classList.remove('active');
+  backToMenu();
+}
+
+// Switching tabs or apps pauses the derby instead of leaving it running blind
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && gameState === 'playing') togglePause();
+});
+
+// ==================== FLAGMAN ====================
+// Short calls at the top of the arena: who is out and why, and driver's
+// door warnings. With no score or damage numbers, this is how the player
+// follows the derby.
+function announce(text, color = '#ffffff') {
+  announcements.push({ text, color, life: 210 });
+  if (announcements.length > 3) announcements.shift();
+}
+
+function carLabel(car) {
+  return car.isPlayer ? 'You are' : `#${car.carNumber.toString().padStart(2, '0')} is`;
+}
+
+// Take a car out of the derby
+function retireCar(car, reason) {
+  car.disabled = true;
+  car.disabledReason = reason;
+  if (reason === 'damage') {
+    car.speed = 0;
+    car.vx = 0;
+    car.vy = 0;
+  }
+  if (car.isPlayer) {
+    if (reason !== 'damage') playerDisqualified = true;
+    muteEngine();
+  } else {
+    disabledCars.push(car);
+  }
+  const why = reason === 'timeout' ? 'flagged out: no hit in 30 seconds'
+    : reason === 'door' ? "flagged out: second driver's-door hit"
+    : 'out: car is finished';
+  announce(`${carLabel(car)} ${why}`, car.isPlayer ? '#ff6b5e' : '#ffd27a');
+}
+
 function updateCountdown() {
   countdownTimer++;
   if (countdownTimer >= 60) {
@@ -120,12 +174,7 @@ function updateGame() {
     // Update engine sound based on player state
     updateEngineSound(player.speed, controls.gas || controls.reverse);
 
-    if (frameCount - player.lastContactFrame > CONTACT_TIMEOUT) {
-      player.disabled = true;
-      player.disabledReason = 'timeout';
-      playerDisqualified = true;
-      muteEngine();
-    }
+    if (frameCount - player.lastContactFrame > CONTACT_TIMEOUT) retireCar(player, 'timeout');
   }
 
   // Update enemies
@@ -134,13 +183,7 @@ function updateGame() {
       const ai = updateAI(enemy);
       updateCarPhysics(enemy, ai.gas, ai.reverse, ai.left, ai.right);
 
-      if (frameCount - enemy.lastContactFrame > CONTACT_TIMEOUT) {
-        enemy.disabled = true;
-        enemy.disabledReason = 'timeout';
-        disabledCars.push(enemy);
-        score += 100 * level;
-        carsWrecked++;
-      }
+      if (frameCount - enemy.lastContactFrame > CONTACT_TIMEOUT) retireCar(enemy, 'timeout');
     }
   });
 
@@ -180,28 +223,12 @@ function updateGame() {
   updateFieldSound(enemies);
   updateScrapeSound();
 
-  // Check for newly disabled cars
-  enemies.forEach(enemy => {
-    if (!enemy.disabled && isDamagedOut(enemy)) {
-      enemy.disabled = true;
-      enemy.disabledReason = 'damage';
-      enemy.speed = 0;
-      enemy.vx = 0;
-      enemy.vy = 0;
-      disabledCars.push(enemy);
-      score += 250 * level;
-      carsWrecked++;
-    }
+  // Cars that are finished, or flagged out for a second driver's-door hit
+  allCars.forEach(car => {
+    if (car.disabled) return;
+    if (car.doorFlags >= DOOR_RULE.HITS_ALLOWED) retireCar(car, 'door');
+    else if (isDamagedOut(car)) retireCar(car, 'damage');
   });
-
-  if (!player.disabled && isDamagedOut(player)) {
-    player.disabled = true;
-    player.disabledReason = 'damage';
-    player.speed = 0;
-    player.vx = 0;
-    player.vy = 0;
-    muteEngine();
-  }
 
   // Particles
   particles = particles.filter(p => {
@@ -231,13 +258,7 @@ function updateGame() {
     return p.life > 0;
   });
 
-  // Damage popups float up and fade
-  damagePopups = damagePopups.filter(popup => {
-    popup.life--;
-    popup.y += popup.vy;
-    popup.vy *= 0.95;
-    return popup.life > 0;
-  });
+  announcements = announcements.filter(a => --a.life > 0);
 
   // Win/lose
   if (gameMode === 'championship') {
@@ -247,11 +268,6 @@ function updateGame() {
 
     if (player.disabled) {
       gameState = 'gameover';
-      if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('demolitionDerbyHighScoreV9', highScore);
-      }
-      updateHighScoreDisplay();
       document.getElementById('hud-panel').classList.remove('active');
       document.getElementById('touch-controls').classList.remove('active');
       document.getElementById('keyboard-hint').classList.remove('active');
@@ -275,24 +291,9 @@ function renderGame() {
   disabledCars.forEach(drawCar);
   allCars.filter(c => !c.disabled).forEach(drawCar);
 
-  // Health bars above active cars
-  allCars.filter(c => !c.disabled).forEach(car => {
-    drawHealthBar(car);
-  });
-
-  damagePopups.forEach(popup => {
-    const alpha = Math.min(popup.life / 20, 1);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.font = 'bold 16px Arial';
-    ctx.textAlign = 'center';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3;
-    ctx.strokeText('-' + popup.damage, popup.x, popup.y);
-    ctx.fillStyle = popup.color;
-    ctx.fillText('-' + popup.damage, popup.x, popup.y);
-    ctx.restore();
-  });
+  // No health bars or damage numbers: a car's state shows in its bodywork,
+  // smoke and fire. Just a marker so the player can find their own car.
+  if (!player.disabled) drawPlayerMarker(player);
 
   // Particles
   particles.forEach(p => {
@@ -341,6 +342,7 @@ function renderGame() {
   ctx.globalAlpha = 1;
 
   drawWeather();
+  drawAnnouncements();
 
   updateHUD();
 }
@@ -353,6 +355,7 @@ document.addEventListener('keydown', e => {
     case 'w': case 'arrowup': controls.gas = true; break;
     case 's': case 'arrowdown': controls.reverse = true; break;
     case 'm': if (!e.repeat) toggleMute(); break;
+    case 'p': case 'escape': if (!e.repeat) togglePause(); break;
   }
 });
 

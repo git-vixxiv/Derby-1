@@ -21,6 +21,21 @@ let lastCrashIntensity = 0;
 let activeCrashVoices = 0;
 let scrapeLevel = 0;
 
+// Recorded sounds (v11.1). Files in sounds/ are loaded at startup; any slot
+// whose files load replaces the synthesized version of that sound, and any
+// that are missing fall back to it. To change a sound, replace the file
+// (same name) or add another number to its list here. See sounds/README.md.
+const SOUND_FILES = {
+  engine: ['engine_loop.wav'],                                   // one seamless idle loop; pitched up with revs
+  thud:   ['thud_1.mp3', 'thud_2.mp3', 'thud_3.mp3', 'thud_4.mp3'],   // low body of a hit
+  hit:    ['hit_1.mp3', 'hit_2.mp3', 'hit_3.mp3', 'hit_4.mp3', 'hit_5.mp3', 'hit_6.mp3'], // metal-on-metal impact
+  debris: ['debris_1.mp3', 'debris_2.mp3', 'debris_3.mp3', 'debris_4.mp3'], // metal and trim falling after a big hit
+  glass:  ['glass_1.mp3', 'glass_2.mp3']                          // glass breaking, biggest hits only
+};
+const USE_RECORDED_SOUNDS = true;
+let soundBank = { engine: [], thud: [], hit: [], debris: [], glass: [] };
+let engineIsRecorded = false;
+
 const MASTER_VOLUME = 0.9;
 const MAX_CRASH_VOICES = 6;
 const IDLE_RPM_RATE = 1;     // playbackRate of the engine loop at idle (~750 rpm)
@@ -53,9 +68,40 @@ function initAudio() {
     scrapeVoice = createScrapeVoice();
 
     soundEnabled = true;
+    // (browsers can't fetch files when the page itself was opened from disk)
+    if (USE_RECORDED_SOUNDS && location.protocol !== 'file:') loadRecordedSounds();
   } catch (e) {
     soundEnabled = false;
   }
+}
+
+// Fetch and decode everything in SOUND_FILES. Needs http(s): when the game
+// is opened straight from disk the fetches fail and the synthesized sounds
+// stay in use.
+function loadRecordedSounds() {
+  const decode = data => new Promise((resolve, reject) => audioCtx.decodeAudioData(data, resolve, reject));
+  const loadOne = (slot, file, index) =>
+    fetch('sounds/' + file)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then(decode)
+      .then(buffer => { buffer.fileName = file; soundBank[slot][index] = buffer; })
+      .catch(() => {}); // missing or undecodable: that slot keeps its fallback
+  const jobs = [];
+  for (const slot of Object.keys(SOUND_FILES)) SOUND_FILES[slot].forEach((file, i) => jobs.push(loadOne(slot, file, i)));
+  return Promise.all(jobs).then(() => {
+    for (const slot of Object.keys(soundBank)) soundBank[slot] = soundBank[slot].filter(Boolean);
+    if (soundBank.engine.length) useRecordedEngine(soundBank.engine[0]);
+  });
+}
+
+// Swap both engine voices over to the recorded loop
+function useRecordedEngine(buffer) {
+  const stop = voice => { voice.gain.gain.value = 0; voice.sources.forEach(({ src }) => { try { src.stop(); } catch (e) {} }); };
+  stop(engineVoice);
+  stop(fieldVoice);
+  engineIsRecorded = true;
+  engineVoice = createEngineVoice(buffer, [1], true);
+  fieldVoice = createEngineVoice(buffer, [0.93, 1.09], true);
 }
 
 function toggleMute() {
@@ -122,9 +168,10 @@ function createEngineBuffer() {
   return buffer;
 }
 
-function createEngineVoice(buffer, rateMultipliers) {
+function createEngineVoice(buffer, rateMultipliers, recorded = false) {
   const shaper = audioCtx.createWaveShaper();
-  shaper.curve = makeDriveCurve(2.2);
+  // A recording already has its own grit; only the synthesized loop needs drive
+  shaper.curve = makeDriveCurve(recorded ? 0.6 : 2.2);
   const filter = audioCtx.createBiquadFilter();
   filter.type = 'lowpass';
   filter.frequency.value = 500;
@@ -176,6 +223,13 @@ function updateEngineSound(speed, isAccelerating) {
   const volume = isAccelerating ? 0.14 + speedFrac * 0.06 : 0.06 + speedFrac * 0.04;
   // Revs rise faster than they fall (flywheel inertia)
   const timeConst = isAccelerating ? 0.09 : 0.22;
+  if (engineIsRecorded) {
+    // A real recording can't be pitched as far as the synthesized pulses
+    // without sounding like a toy: idle at 0.85x up to about 2x at full revs
+    const revs = (rate - IDLE_RPM_RATE) / (REDLINE_RPM_RATE - IDLE_RPM_RATE);
+    setEngineVoice(engineVoice, 0.85 + revs * 1.15, isAccelerating ? 2600 + revs * 3400 : 1400 + revs * 1600, volume * 1.5, timeConst);
+    return;
+  }
   setEngineVoice(engineVoice, rate, cutoff, volume, timeConst);
 }
 
@@ -194,6 +248,10 @@ function updateFieldSound(cars) {
   const wander = Math.sin(Date.now() / 700) * 0.08 + Math.sin(Date.now() / 1900) * 0.06;
   const rate = 1.1 + speedFrac * 2.4 + wander;
   const volume = Math.min(0.08, 0.022 * Math.sqrt(running.length));
+  if (engineIsRecorded) {
+    setEngineVoice(fieldVoice, 0.8 + speedFrac * 0.7 + wander * 0.5, 700 + speedFrac * 500, volume * 1.4, 0.3);
+    return;
+  }
   setEngineVoice(fieldVoice, rate, 320 + speedFrac * 250, volume, 0.3);
 }
 
@@ -422,29 +480,57 @@ function playCrashSound(intensity, x) {
   lastCrashTime = now;
   lastCrashIntensity = norm;
 
-  const tierName = norm < 0.3 ? 'light' : norm < 0.65 ? 'medium' : 'heavy';
-  const pool = crashBuffers[tierName];
-  const source = audioCtx.createBufferSource();
-  source.buffer = pool[Math.floor(Math.random() * pool.length)];
-  // Small random pitch shift so repeats never sound identical
-  source.playbackRate.value = 0.9 + Math.random() * 0.2;
-
-  const gain = audioCtx.createGain();
-  gain.gain.value = 0.1 + 0.75 * Math.pow(norm, 0.7);
-
-  let tail = gain;
-  if (audioCtx.createStereoPanner && typeof x === 'number') {
-    const pan = audioCtx.createStereoPanner();
-    pan.pan.value = clamp((x / ARENA_WIDTH) * 2 - 1, -1, 1) * 0.6;
-    gain.connect(pan);
-    tail = pan;
+  const pan = typeof x === 'number' ? clamp((x / ARENA_WIDTH) * 2 - 1, -1, 1) * 0.6 : 0;
+  if (soundBank.hit.length) {
+    playRecordedCrash(norm, pan);
+    return;
   }
 
+  // Synthesized fallback (recordings missing, or the game opened from disk)
+  const tierName = norm < 0.3 ? 'light' : norm < 0.65 ? 'medium' : 'heavy';
+  const pool = crashBuffers[tierName];
+  // Small random pitch shift so repeats never sound identical
+  playBuffer(pool[Math.floor(Math.random() * pool.length)], 0.1 + 0.75 * Math.pow(norm, 0.7), 0.9 + Math.random() * 0.2, pan, 0, true);
+}
+
+// A crash built from recordings, layered the way a real one is heard:
+// the low thud of the bodies meeting, the metal impact itself, then (for
+// harder hits) loose metal and trim coming down, and glass on the biggest.
+// Harder hits play lower and longer; lighter ones are a single short knock.
+function playRecordedCrash(norm, pan) {
+  const pick = pool => pool[Math.floor(Math.random() * pool.length)];
+  const vary = () => 0.94 + Math.random() * 0.12;
+  const weight = 1.08 - 0.33 * norm; // playback rate: big hits pitched down for mass
+  const level = 0.12 + 0.8 * Math.pow(norm, 0.75);
+
+  playBuffer(pick(soundBank.hit), level, weight * vary(), pan, 0, true);
+  if (norm > 0.2 && soundBank.thud.length) playBuffer(pick(soundBank.thud), level * 1.1, (0.95 - 0.25 * norm) * vary(), pan, 0);
+  if (norm > 0.55) playBuffer(pick(soundBank.hit), level * 0.6, weight * 0.8 * vary(), pan, 0.03);
+  if (norm > 0.4 && soundBank.debris.length) playBuffer(pick(soundBank.debris), level * 0.5, (1.05 - 0.2 * norm) * vary(), pan, 0.06 + Math.random() * 0.06);
+  if (norm > 0.75 && soundBank.glass.length) playBuffer(pick(soundBank.glass), level * 0.3, vary(), pan, 0.09 + Math.random() * 0.08);
+}
+
+// Play one buffer once. `counted` voices are the ones the polyphony cap tracks.
+function playBuffer(buffer, volume, rate, pan, delay, counted = false) {
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.playbackRate.value = rate;
+  const gain = audioCtx.createGain();
+  gain.gain.value = volume;
+  let tail = gain;
+  if (audioCtx.createStereoPanner) {
+    const panner = audioCtx.createStereoPanner();
+    panner.pan.value = pan;
+    gain.connect(panner);
+    tail = panner;
+  }
   source.connect(gain);
   tail.connect(masterGain);
-  activeCrashVoices++;
-  source.onended = () => { activeCrashVoices--; };
-  source.start(0);
+  if (counted) {
+    activeCrashVoices++;
+    source.onended = () => { activeCrashVoices--; };
+  }
+  source.start(audioCtx.currentTime + delay);
 }
 
 // ==================== HELPERS ====================

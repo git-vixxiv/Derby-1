@@ -139,3 +139,100 @@ body.touch #countdown-overlay { z-index: 5; }
   body.touch .garage-title { left: 16px; }
   body.touch .garage-model-box { min-width: 160px; }
 }
+
+/* v11.1: player status, pause */
+.life-zone .life-bar { width: 110px; }
+.pause-btn { background: #333; color: #ccc; border: 1px solid #555; border-radius: 6px; width: 36px; height: 30px; font-weight: bold; cursor: pointer; touch-action: manipulation; }
+@media (orientation: landscape) {
+  body.touch .damage-bars { flex-wrap: wrap; row-gap: 3px; }
+  body.touch .life-zone .life-bar { width: 118px; height: 10px; }
+  body.touch .pause-btn { width: 44px; height: 26px; }
+}
+
+/* ===== Splash screen (v11.1), after Joe's mockup: stadium art behind,
+   riveted metal panel on the left, clipboard on the right. The art is
+   images/splash.jpg; until that file exists the gradient shows instead. ===== */
+#menu-overlay.splash {
+  position: fixed; inset: 0; z-index: 20; border-radius: 0; overflow-y: auto;
+  justify-content: flex-start; align-items: stretch; padding: 0;
+  background:
+    linear-gradient(180deg, rgba(6,8,14,0.55) 0%, rgba(6,8,14,0.05) 30%, rgba(14,9,5,0.35) 100%),
+    url(../images/splash.jpg) center / cover no-repeat,
+    radial-gradient(ellipse at 50% 22%, #39415c 0%, #161a26 45%, #1c130b 100%);
+}
+.splash-title {
+  font-family: Impact, Haettenschweiler, 'HelveticaNeue-CondensedBlack', 'AvenirNextCondensed-Heavy', 'Futura-CondensedExtraBold', 'Roboto Condensed', 'Arial Narrow', 'Arial Black', sans-serif; font-weight: 800;
+  font-size: clamp(34px, 8.5vw, 104px); line-height: 1; letter-spacing: 0.04em; text-align: center;
+  padding: clamp(10px, 3vh, 34px) 10px clamp(6px, 2vh, 20px);
+  background: linear-gradient(180deg, #ffd24a 0%, #ff9a1f 38%, #d9531a 62%, #7a2a12 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 1.5px rgba(40,16,6,0.9);
+  filter: drop-shadow(0 4px 0 #1b0d06) drop-shadow(0 0 18px rgba(255,120,20,0.45));
+}
+.splash-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 0 clamp(10px, 3vw, 44px) 18px; flex: 1; }
+.metal-panel {
+  width: min(380px, 100%); padding: 14px; border-radius: 6px;
+  background:
+    radial-gradient(circle at 10px 10px, #6b6b6b 0 3px, transparent 4px) 0 0 / 100% 100% no-repeat,
+    radial-gradient(circle at calc(100% - 10px) 10px, #6b6b6b 0 3px, transparent 4px) 0 0 / 100% 100% no-repeat,
+    radial-gradient(circle at 10px calc(100% - 10px), #6b6b6b 0 3px, transparent 4px) 0 0 / 100% 100% no-repeat,
+    radial-gradient(circle at calc(100% - 10px) calc(100% - 10px), #6b6b6b 0 3px, transparent 4px) 0 0 / 100% 100% no-repeat,
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.025) 0 2px, transparent 2px 6px),
+    linear-gradient(180deg, rgba(38,38,40,0.94), rgba(20,20,22,0.94));
+  border: 2px solid #5a5a5a; box-shadow: 0 6px 18px rgba(0,0,0,0.6), inset 0 0 0 1px #111;
+}
+.plate {
+  display: block; background: linear-gradient(180deg, #2c2c2e, #19191a); border: 1px solid #555; border-radius: 4px;
+  color: #f1e3c6; font-family: Impact, Haettenschweiler, 'HelveticaNeue-CondensedBlack', 'AvenirNextCondensed-Heavy', 'Futura-CondensedExtraBold', 'Roboto Condensed', 'Arial Narrow', 'Arial Black', sans-serif; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.car-plate { font-size: 15px; padding: 8px 6px; margin: 2px 0 10px; min-height: 18px; color: #f5d9a0; }
+.splash .menu-settings { gap: 8px; margin: 0 0 14px; }
+.splash .setting-row { flex-direction: column; align-items: stretch; gap: 3px; }
+.splash .setting-label { width: auto; text-align: center; color: #d8d2c4; font-family: Impact, Haettenschweiler, 'HelveticaNeue-CondensedBlack', 'AvenirNextCondensed-Heavy', 'Futura-CondensedExtraBold', 'Roboto Condensed', 'Arial Narrow', 'Arial Black', sans-serif; font-weight: 800; font-size: 15px; letter-spacing: 0.08em; }
+.setting-control { display: flex; align-items: stretch; gap: 6px; }
+.splash .setting-value { flex: 1; width: auto; font-size: 15px; padding: 8px 4px; color: #f1e3c6; }
+.plate-arrow {
+  width: 42px; border-radius: 4px; border: 1px solid #6a5a2a; cursor: pointer; touch-action: manipulation;
+  background: linear-gradient(180deg, #3a3a3c, #1d1d1e); color: #ffc531; font-size: 16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.plate-arrow:active { transform: scale(0.94); }
+.splash .menu-buttons { gap: 10px; align-items: stretch; }
+.plate-btn {
+  font-family: Impact, Haettenschweiler, 'HelveticaNeue-CondensedBlack', 'AvenirNextCondensed-Heavy', 'Futura-CondensedExtraBold', 'Roboto Condensed', 'Arial Narrow', 'Arial Black', sans-serif; font-weight: 800; font-size: 26px; letter-spacing: 0.06em; padding: 12px 10px; cursor: pointer; touch-action: manipulation;
+  color: #ff9a1f; background: linear-gradient(180deg, #333335, #18181a); border: 2px solid #6b6b6b; border-radius: 6px;
+  text-shadow: 0 2px 0 #000; box-shadow: 0 4px 10px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.plate-btn:hover { filter: brightness(1.15); }
+.plate-btn:active { transform: scale(0.98); }
+.plate-btn-hot { color: #ffd24a; background: linear-gradient(180deg, #e2531b 0%, #b5320f 55%, #7c1f0a 100%); border-color: #f0a060; }
+.plate-btn-steel { align-self: center; font-size: 18px; padding: 8px 34px; color: #1a1a1a; text-shadow: 0 1px 0 rgba(255,255,255,0.4); background: linear-gradient(180deg, #c9c9c9, #8a8a8a); border-color: #e0e0e0; }
+.clipboard {
+  width: min(300px, 100%); padding: 22px 14px 12px; border-radius: 6px; position: relative;
+  background: linear-gradient(180deg, rgba(42,42,44,0.94), rgba(22,22,24,0.94)); border: 2px solid #5a5a5a; box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+}
+.clipboard::before { content: ''; position: absolute; top: -9px; left: 50%; width: 110px; height: 18px; margin-left: -55px; border-radius: 4px; background: linear-gradient(180deg, #bdbdbd, #6f6f6f); border: 1px solid #333; }
+.clip-title { font-family: Impact, Haettenschweiler, 'HelveticaNeue-CondensedBlack', 'AvenirNextCondensed-Heavy', 'Futura-CondensedExtraBold', 'Roboto Condensed', 'Arial Narrow', 'Arial Black', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 0.08em; color: #f1e3c6; text-align: center; margin-bottom: 8px; }
+.clip-keys { font-size: 12px; color: #cfcfcf; line-height: 2; text-align: center; background: rgba(0,0,0,0.35); border-radius: 4px; padding: 6px; }
+.clip-keys kbd { background: #3a3a3a; border: 1px solid #666; border-radius: 3px; padding: 1px 6px; font-family: monospace; color: #fff; }
+.clip-tips { margin: 10px 0 0 16px; padding: 0; font-size: 13px; color: #e6e6e6; line-height: 1.45; }
+.clip-tips li { margin-bottom: 6px; }
+body.touch .clip-keys { display: none; }
+/* Narrow or short screens: stack the panels and keep them compact */
+@media (max-width: 720px) {
+  .splash-body { flex-direction: column; align-items: center; }
+  .clipboard { width: min(380px, 100%); }
+}
+@media (max-height: 560px) {
+  .splash-title { font-size: clamp(24px, 6vw, 40px); padding: 6px 10px 4px; }
+  .metal-panel { padding: 10px; }
+  .car-plate { font-size: 13px; padding: 5px; margin-bottom: 6px; }
+  .splash .menu-settings { gap: 4px; margin-bottom: 8px; }
+  .splash .setting-label { font-size: 12px; }
+  .splash .setting-value { font-size: 13px; padding: 5px 4px; }
+  .splash .menu-buttons { gap: 6px; }
+  .plate-btn { font-size: 19px; padding: 7px 8px; }
+  .plate-btn-steel { font-size: 14px; padding: 5px 24px; }
+  .clip-tips { font-size: 12px; }
+}

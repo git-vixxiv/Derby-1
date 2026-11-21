@@ -121,8 +121,18 @@ function resolveCollision(car1, car2, collision) {
   // Runs before the early return below so a sustained shove keeps counting.
   const approach1 = vecDot(vel1, collision.normal);  // car1 moving toward car2
   const approach2 = -vecDot(vel2, collision.normal); // car2 moving toward car1
-  if (approach1 > CONTACT_INITIATE_SPEED && !car2.disabled) car1.lastContactFrame = frameCount;
-  if (approach2 > CONTACT_INITIATE_SPEED && !car1.disabled) car2.lastContactFrame = frameCount;
+  // Driver's-door rule: a hit on a running car's driver's door is illegal.
+  // It earns no credit, and a real one gets called (see callDoorHit).
+  const door1 = !car2.disabled && isDriversDoor(car2, collision.contactPoint); // car1 would be at fault
+  const door2 = !car1.disabled && isDriversDoor(car1, collision.contactPoint);
+  if (approach1 > CONTACT_INITIATE_SPEED && !car2.disabled) {
+    if (door1) callDoorHit(car1, car2, approach1);
+    else car1.lastContactFrame = frameCount;
+  }
+  if (approach2 > CONTACT_INITIATE_SPEED && !car1.disabled) {
+    if (door2) callDoorHit(car2, car1, approach2);
+    else car2.lastContactFrame = frameCount;
+  }
   // Normal points from car1 to car2, so relative velocity is taken as
   // car2 relative to car1: negative along the normal = closing in.
   // (Before v10 this was vel1 - vel2, which flipped the test below: head-on
@@ -277,9 +287,6 @@ function applyDamage(car1, car2, collision, energy) {
     else if (zone === 'rear') car.rearDamage += dmg;
     else car.sideDamage += dmg;
     addDeformation(car, collision.contactPoint, zone, dmg);
-    if (dmg >= 1) {
-      spawnDamagePopup(car.x, car.y - 45, Math.round(dmg), car.isPlayer ? '#ff4444' : '#ffaa00');
-    }
   }
 
   // Visual effects for anything harder than a nudge
@@ -319,15 +326,35 @@ function applyDamage(car1, car2, collision, energy) {
   }
 }
 
-function spawnDamagePopup(x, y, damage, color) {
-  damagePopups.push({
-    x: x + (Math.random() - 0.5) * 20,
-    y: y,
-    damage: damage,
-    color: color,
-    life: 60, // 1 second at 60fps
-    vy: -1.5 // Float upward
-  });
+// ==================== DRIVER'S DOOR ====================
+// Where the driver's door sits along the car (car-local x, nose is +x).
+// The driver sits on the left, which is -y in car space.
+function getDoorSpan(car) {
+  const dim = getCarDimensions(car);
+  const front = dim.length / 2 - dim.hoodLength - DOOR_RULE.FROM_WINDSHIELD * CAR_SCALE;
+  return { front, rear: front - DOOR_RULE.LENGTH * CAR_SCALE, halfWidth: dim.width / 2 };
+}
+
+function isDriversDoor(car, point) {
+  const local = vecRotate(vecSub(point, vec(car.x, car.y)), -car.angle);
+  const door = getDoorSpan(car);
+  return local.y < -door.halfWidth * 0.3 && local.x <= door.front && local.x >= door.rear;
+}
+
+// `offender` drove into `victim`'s driver's door at `approach` px/step.
+// Light contact isn't called. One call per incident: the cars stay in
+// contact for several steps.
+function callDoorHit(offender, victim, approach) {
+  if (approach < DOOR_RULE.MIN_CLOSING * PHYSICS.MAX_FORWARD_SPEED) return;
+  if (frameCount - (offender.lastDoorFlag ?? -1000) < 90) return;
+  offender.lastDoorFlag = frameCount;
+  offender.doorFlags = (offender.doorFlags || 0) + 1;
+  if (offender.doorFlags < DOOR_RULE.HITS_ALLOWED) {
+    announce(offender.isPlayer
+      ? "WARNING: you hit a driver's door. Next one and you're out."
+      : `#${offender.carNumber.toString().padStart(2, '0')} warned: driver's-door hit`,
+      offender.isPlayer ? '#ff6b5e' : '#ffd27a');
+  }
 }
 
 function getZoneDamageMultiplier(zone, type) {

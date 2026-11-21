@@ -71,6 +71,19 @@ const PHYSICS = {
   ANGULAR_IMPULSE_SCALE: 0.012
 };
 
+// Driver's-door rule (v11.1), as at a real derby: hitting the driver's
+// door of a running car is illegal. The driver's door is the left side
+// of the cabin and is painted on every car. A door hit never counts
+// toward the hit clock. The first one harder than MIN_CLOSING (closing
+// speed as a fraction of top speed) draws a warning; the next puts the
+// car out. Same rule for every car, the player's and the AI's.
+const DOOR_RULE = {
+  HITS_ALLOWED: 2,    // out on this many called door hits in a round
+  MIN_CLOSING: 0.2,   // lighter contact than this isn't called (about 8 mph)
+  LENGTH: 17,         // door length along the car, base units (before CAR_SCALE)
+  FROM_WINDSHIELD: 5  // gap between the base of the windshield and the door's front edge
+};
+
 // Crash-sound and scrape levels were tuned when top speed was 9; this maps
 // current speeds onto that scale.
 const DAMAGE_SPEED_SCALE = 9 / PHYSICS.MAX_FORWARD_SPEED;
